@@ -30,9 +30,9 @@ struct qbt_platform {
     int (*firmware_get)(void *, const char *, const uint8_t **, size_t *);
     void (*firmware_put)(void *, const uint8_t *, size_t);
     void (*log)(void *, int, const char *);
-    /* Optional discovery diagnostics on the executor. TX means the complete
-     * command reached uart_write, not that the controller acknowledged it.
-     * Bytes exclude the H4 type and remain valid only during this callback. */
+    /* Optional diagnostics on the executor. For ACL (type 2) bytes contain
+     * the four-byte HCI header only. Command and event bytes exclude H4 type.
+     * The pointer remains valid for this callback. */
     void (*trace_hci)(void *, bool tx, uint8_t type, const uint8_t *, size_t);
     enum qbt_controller_family controller_family;
 };

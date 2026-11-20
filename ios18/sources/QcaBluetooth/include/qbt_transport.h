@@ -13,7 +13,7 @@ struct qbt_transport_ops {
     int (*power)(void *, bool);
 };
 extern volatile uint32_t qbt_transport_activity[4];
-int qbt_transport_init(const struct qbt_transport_ops *);
+int qbt_transport_init(const struct qbt_transport_ops *, uint32_t baud);
 void qbt_transport_boot_result(int error, const char *firmware, uint32_t baud);
 void qbt_transport_power_result(bool enabled, int error, const char *firmware, uint32_t baud);
 uint32_t qbt_transport_receive(const uint8_t *, uint32_t);

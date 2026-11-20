@@ -18,7 +18,7 @@ STATIC UINTN mDisplayBankCount;
 STATIC UINT64 DisplayCounter(VOID);
 STATIC BOOLEAN mPanelAsleep;
 STATIC UINT32 mPanelBrightness=0x133;
-STATIC UINT64 mPanelReadAt;
+STATIC UINT32 mBootTimingEngine;
 STATIC UINT32 mPanelHz=60;
 STATIC VOID PanelPublishState(VOID) {
   UINT32 State=0x80000000U|(mPanelAsleep?1U<<30:0)|(mPanelHz<<16)|mPanelBrightness;
@@ -61,6 +61,15 @@ STATIC BOOLEAN PanelPacketMode(UINT32 Header, UINT32 Payload, UINT32 Length, UIN
   Dsi[0x17c/4]=Header;
   Dsi[0x17c/4]=Payload;
   Dsi[0x3c/4]=(Dma&~((1U<<31)|(1U<<30)|(1U<<26)))|(1U<<28)|(LowPower?(1U<<26):0);
+  UINT32 Schedule=Dsi[0x100/4];
+  BOOLEAN ScheduleVideo=(Control&2U) && !Commit;
+  if (ScheduleVideo) {
+    UINT32 ActiveEnd=Dsi[0x28/4]>>16;
+    UINT32 LastLine=Dsi[0x2c/4]>>16;
+    if (ActiveEnd+1U<=LastLine)
+      Dsi[0x100/4]=(Schedule&~0xffffU)|(1U<<28)|(ActiveEnd+1U);
+    else ScheduleVideo=FALSE;
+  }
   Dsi[0x4c/4]=Length;__asm__ volatile("dsb sy":::"memory");Dsi[0x90/4]=1;
   if (Commit) Commit(Context);
   UINT64 Began=DisplayCounter();BOOLEAN Done=FALSE;
@@ -79,6 +88,7 @@ STATIC BOOLEAN PanelPacketMode(UINT32 Header, UINT32 Payload, UINT32 Length, UIN
   Dsi[0x110/4]=Interrupts|1U|(1U<<20);
   if (Response) *Response=Done ? __builtin_bswap32(Dsi[0x6c/4]) : 0;
   Dsi[0x15c/4]=0;Dsi[0x1ec/4]=1;__asm__ volatile("dsb sy":::"memory");gBS->Stall(1);Dsi[0x1ec/4]=0;
+  if (ScheduleVideo) Dsi[0x100/4]=Schedule;
   Dsi[0x15c/4]=Pattern;Dsi[0x3c/4]=Dma;Dsi[4/4]=Control;__asm__ volatile("dsb sy":::"memory");
   return Done;
 }
@@ -103,14 +113,12 @@ STATIC VOID PanelReadState(VOID) {
   mDisplay->panel_status[0]=B ? Brightness : 0;
   mDisplay->panel_status[1]=P ? Power : 0;
   mDisplay->panel_status[2]++;
-  mPanelReadAt=DisplayCounter();
 }
 STATIC BOOLEAN PanelBrightness(UINT32 Level) {
   if (Level<4) Level=4;
   if (Level>4095) Level=4095;
   if (!mPanelAsleep && !PanelCommand(0x51,(UINT8)(Level>>8),(UINT8)Level,3)) return FALSE;
   mPanelBrightness=Level;
-  if (!mPanelAsleep && DisplayCounter()-mPanelReadAt>=mDisplayFrequency) PanelReadState();
   return TRUE;
 }
 STATIC BOOLEAN PanelPower(BOOLEAN On) {
@@ -118,9 +126,10 @@ STATIC BOOLEAN PanelPower(BOOLEAN On) {
   if (On) {
     if (!PanelCommand(0x11,0,0,2)) return FALSE;
     gBS->Stall(120000);
-    if (!PanelCommand(0x29,0,0,2)) return FALSE;
+    if (!PanelCommand(0x51,(UINT8)(mPanelBrightness>>8),(UINT8)mPanelBrightness,3) ||
+        !PanelCommand(0x29,0,0,2)) return FALSE;
     mPanelAsleep=FALSE;
-    BOOLEAN Done=PanelBrightness(mPanelBrightness);PanelReadState();return Done;
+    return TRUE;
   }
   if (!PanelCommand(0x28,0,0,2)) return FALSE;
   mPanelAsleep=TRUE;
@@ -285,7 +294,6 @@ STATIC BOOLEAN DisplaySaveSmmu(VOID) {
   return TRUE;
 }
 STATIC BOOLEAN DisplayRestore(VOID) {
-  if (mPanelAsleep && !PanelPower(TRUE)) return FALSE;
   CONST UINT32 Offsets[6]={0,0x20,0x24,0x10,0x30,0x38};
   /* The boot snapshot belongs to the firmware, outside replaceable KernelSeed. */
   for (UINTN I=0;I<mDisplayBankCount;I++) {
@@ -306,10 +314,18 @@ STATIC BOOLEAN DisplayRestore(VOID) {
     for (UINTN J=0;J<8;J++) Mdp[(mPipe[I]+mRegisters[J])/4]=mDisplay->registers[I][J];
   __asm__ volatile("dsb sy":::"memory");Mdp[0x16018/4]=mDisplay->flush_mask;
   __asm__ volatile("dsb sy":::"memory");
+  /* The XNU display owner can park DSI1 before a retained-stage return. */
+  if (mBootTimingEngine && !Mdp[0x36000/4]) {
+    volatile UINT32 *Dsi=(VOID *)(UINTN)0xae94000;
+    Dsi[4/4]|=2U;
+    __asm__ volatile("dsb sy":::"memory");
+    Mdp[0x36000/4]=mBootTimingEngine;
+    __asm__ volatile("dsb sy":::"memory");
+  }
   UINT64 Began=DisplayCounter();
   while (Mdp[0x16018/4]&mDisplay->flush_mask)
     if (DisplayCounter()-Began>mDisplayFrequency/20) return FALSE;
-  return TRUE;
+  return !mPanelAsleep || PanelPower(TRUE);
 }
 VOID MarbleDisplayPrepare(ROOT_STAGE_TABLE *Stage) {
   PanelImportState();
@@ -360,6 +376,7 @@ VOID MarbleDisplayPrepare(ROOT_STAGE_TABLE *Stage) {
   {
     UINT64 Fault[2]={0};UINT32 DsiControl=0;
     if (MarbleRootReadRegister(&DsiControl,(CONST VOID *)(UINTN)0xae94004,0,Fault) && (DsiControl&1)) {
+      if ((Active&6U)==2U && (DsiControl&2U)) DisplayReadPhysical(0xae36000, &mBootTimingEngine);
       mDisplay->reserved[4]=MARBLE_PANEL_DCS_CAP;
       mDisplay->reserved[3]=MARBLE_PANEL_REFRESH_CAP;
     }

@@ -39,25 +39,121 @@
  extern "C" void sched_override_available_cores_for_sleep(void);
  extern "C" void sched_restore_available_cores_after_sleep(void);
  
-@@ -278,6 +283,11 @@
+@@ -264,7 +269,12 @@
+ 	IOCPU *bootCPU = NULL;
+ 	IOPMrootDomain  *rootDomain = IOService::getPMRootDomain();
+ 
+-	printf("IOCPUSleepKernel enter\n");
++#if XNU_ARMCPU
++	const bool retained_sleep = native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready() &&
++	    native_marble_suspend_bind_boot && native_marble_suspend_restore_binding;
++	if (!retained_sleep)
++#endif
++		printf("IOCPUSleepKernel enter\n");
+ 	sched_override_available_cores_for_sleep();
+ 
+ 	rootDomain->tracePoint( kIOPMTracePointSleepPlatformActions );
+@@ -278,6 +288,9 @@
  
  	integer_t old_pri;
  	thread_t self = current_thread();
 +#if XNU_ARMCPU
-+	const bool retained_sleep = native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready() &&
-+	    native_marble_suspend_bind_boot && native_marble_suspend_restore_binding;
 +	void *sleep_binding = retained_sleep ? native_marble_suspend_bind_boot() : nullptr;
 +#endif
  
  	/*
  	 * We need to boost this thread's priority to the maximum kernel priority to
-@@ -365,6 +375,9 @@
+@@ -365,7 +378,11 @@
  	sched_restore_available_cores_after_sleep();
  
  	thread_kern_set_pri(self, old_pri);
+-	printf("IOCPUSleepKernel exit\n");
 +#if XNU_ARMCPU
 +	if (retained_sleep) native_marble_suspend_restore_binding(sleep_binding);
++	else
 +#endif
- 	printf("IOCPUSleepKernel exit\n");
++		printf("IOCPUSleepKernel exit\n");
  }
+ 
+ static bool
+--- a/iokit/Kernel/IOPMrootDomain.cpp
++++ b/iokit/Kernel/IOPMrootDomain.cpp
+@@ -117,10 +117,17 @@
+ #define DEBUG_LOG(x...)
+ #endif
+ 
++#if XNU_ARMCPU && defined(__arm64__) && !defined(XNU_TARGET_OS_OSX)
++extern "C" int native_marble_cpu_sleep_ready(void) __attribute__((weak_import));
++#define PMRD_OSLOG_ENABLED() (!native_marble_cpu_sleep_ready)
++#else
++#define PMRD_OSLOG_ENABLED() true
++#endif
++
+ #define DLOG(x...)  do { \
+     if (kIOLogPMRootDomain & gIOKitDebug) \
+ 	IOLog(LOG_PREFIX x); \
+-    else \
++    else if (PMRD_OSLOG_ENABLED()) \
+ 	os_log(OS_LOG_DEFAULT, LOG_PREFIX x); \
+ } while (false)
+ 
+@@ -1038,6 +1045,10 @@
+ }
+ 
+ extern "C" int sync_internal(void);
++
++#if XNU_ARMCPU && defined(__arm64__) && !defined(XNU_TARGET_OS_OSX)
++extern "C" int native_marble_retained_user_wake(void) __attribute__((weak_import));
++#endif
+ 
+ /*
+  *  A device is always in the highest power state which satisfies its driver,
+@@ -3137,11 +3148,29 @@
+ 		timeSinceReset = ml_get_time_since_reset();
+ 		kdebugTrace(kPMLogSystemWake, 0, (uintptr_t)(timeSinceReset >> 32), (uintptr_t) timeSinceReset);
+ 
+-		if ((gDarkWakeFlags & kDarkWakeFlagPromotionMask) == kDarkWakeFlagPromotionEarly) {
++		uint32_t wakeFlags = gDarkWakeFlags;
++		bool retainedUserWake = false;
++#if XNU_ARMCPU && defined(__arm64__) && !defined(XNU_TARGET_OS_OSX)
++		if (native_marble_cpu_sleep_ready && native_marble_retained_user_wake &&
++		    native_marble_cpu_sleep_ready()) {
++			// Honor explicit board policy in release builds. Keep the native
++			// default when the retained wake source is unavailable.
++			PE_parse_boot_argn("darkwake", &wakeFlags, sizeof(wakeFlags));
++			retainedUserWake = (wakeFlags & kDarkWakeFlagPromotionMask) != kDarkWakeFlagPromotionEarly &&
++			    native_marble_retained_user_wake();
++		}
++#endif
++		if (retainedUserWake) {
++			darkWakeExit = true;
++			darkWakeToSleepASAP = false;
++			wranglerTickled = true;
++			fullWakeReason = kFullWakeReasonLocalUser;
++			requestUserActive(this, "Marble retained user wake");
++		} else if ((wakeFlags & kDarkWakeFlagPromotionMask) == kDarkWakeFlagPromotionEarly) {
+ 			wranglerTickled = true;
+ 			fullWakeReason = kFullWakeReasonLocalUser;
+ 			requestUserActive(this, "Full wake on dark wake promotion boot-arg");
+-		} else if ((lastDebugWakeSeconds != 0) && !(gDarkWakeFlags & kDarkWakeFlagAlarmIsDark)) {
++		} else if ((lastDebugWakeSeconds != 0) && !(wakeFlags & kDarkWakeFlagAlarmIsDark)) {
+ 			isRTCAlarmWake = true;
+ 			fullWakeReason = kFullWakeReasonLocalUser;
+ 			requestUserActive(this, "RTC debug alarm");
+@@ -7413,6 +7442,16 @@
+ 		DLOG("requestUserActive: device is null\n");
+ 		return;
+ 	}
++#if XNU_ARMCPU && defined(__arm64__) && !defined(XNU_TARGET_OS_OSX)
++	if (native_marble_cpu_sleep_ready && native_marble_retained_user_wake &&
++	    native_marble_cpu_sleep_ready() && !CAP_PENDING(kIOPMSystemCapabilityGraphics) &&
++	    reason && !strcmp(reason, "SideButton")) {
++		// A key can arrive after a background interrupt has already
++		// started the wake transition. Promote on the PM work loop.
++		pmPowerStateQueue->submitPowerEvent(kPowerEventPolicyStimulus,
++		    (void *) kStimulusDarkWakeActivityTickle, true);
++	}
++#endif
+ 	OSSharedPtr<const OSSymbol> deviceName = device->copyName();
+ 	uint64_t registryID = device->getRegistryEntryID();
  

@@ -23,6 +23,8 @@ def main():
     parser.add_argument('--addon', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--metal-bundle', type=Path)
+    parser.add_argument('--ui-source', type=Path, default=ROOT / 'package/MarblePhoneUI.m',
+                        help='Phone UI adapter source for the selected graphics baseline')
     parser.add_argument('--target', choices=('ios17', 'ios18'), default='ios17')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
@@ -59,11 +61,13 @@ def main():
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphoneos', '--show-sdk-path'], text=True).strip()
     compiler_target = 'arm64e-apple-ios18.0' if args.target == 'ios18' else 'arm64-apple-ios17.0'
     write_ui_header(args.output / 'MarbleScreenGeometryProfile.h', args.target)
+    idle_source = [ROOT / 'package/MarbleIdlePolicy.m'] if args.target == 'ios18' else []
+    idle_frameworks = ['-framework', 'IOKit'] if idle_source else []
     run('xcrun', 'clang', '-target', compiler_target, '-isysroot', sdk,
         '-O2', '-Wall', '-Wextra', '-Werror', '-fno-objc-arc', '-dynamiclib',
-        '-I', args.output, ROOT / 'package/MarblePhoneUI.m',
+        '-I', args.output, '-I', ROOT / 'package', args.ui_source, *idle_source,
         ROOT / 'package/MarbleScreenGeometry.m', '-lobjc', '-framework', 'CoreFoundation',
-        '-Wl,-reexport_framework,Foundation', '-install_name', '@loader_path/MarblePhoneUI.dylib',
+        *idle_frameworks, '-Wl,-reexport_framework,Foundation', '-install_name', '@loader_path/MarblePhoneUI.dylib',
         '-compatibility_version', '300.0.0', '-current_version', '300.0.0', '-o', library)
     executable = bundle / 'NativeAdrenoMetal'
     run('xcrun', 'install_name_tool', '-change',
@@ -94,7 +98,9 @@ def main():
     addon = args.output / 'phone-ui.gpuaddon'
     addon.write_bytes(b'NGPUADD2' + struct.pack('<IIQ', len(entries), 0, len(body) + 24) + body)
     report = dict(cdhashes=hashes, addon=str(addon), target=compiler_target, turnip_sha256=turnip_hash,
-                  metal_bundle=str(args.metal_bundle) if args.metal_bundle else str(args.addon))
+                  metal_bundle=str(args.metal_bundle) if args.metal_bundle else str(args.addon),
+                  ui_source_sha256=hashlib.sha256(args.ui_source.read_bytes()).hexdigest(),
+                  idle_source_sha256=hashlib.sha256(idle_source[0].read_bytes()).hexdigest() if idle_source else None)
     (args.output / 'phone-ui.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 

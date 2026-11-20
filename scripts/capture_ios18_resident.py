@@ -386,6 +386,8 @@ def capture(channel, kernel, output, data_snapshot=False):
             if name in symbols:
                 result['globals'][name] = int.from_bytes(memory.read(symbols[name], size), 'little')
         ordered, result['msgbuf'], header, ring = read_message_buffer(memory, symbols)
+        if '_marble_display_features' in symbols:
+            result['display_features'] = struct.unpack('<4I', memory.read(symbols['_marble_display_features'], 16))
         (output / 'msgbuf-header.bin').write_bytes(header)
         (output / 'msgbuf.bin').write_bytes(ring)
         (output / 'kernel.log').write_bytes(ordered)

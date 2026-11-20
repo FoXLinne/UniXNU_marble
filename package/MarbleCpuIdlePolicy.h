@@ -23,6 +23,7 @@ public:
     }
 
     uint32_t active(unsigned domain) const { return active_[domain]; }
+    bool allIdle() const { return !(active_[0] | active_[1] | active_[2]); }
 
     // Return true when the domain needs an EPSS vote for its first wake or last idle entry.
     bool change(unsigned physical, bool enteringIdle)
@@ -34,4 +35,25 @@ public:
         else active_[index] |= bit;
         return wasActive != (active_[index] != 0);
     }
+};
+
+// Sample the busiest XNU-owned CPU. A brief interruption between 20% and
+// 35% resets the quiet streak without toggling an already-low L3 vote.
+class MarbleL3IdlePolicy {
+    unsigned quiet_ = 0;
+    bool low_ = false;
+public:
+    bool update(bool panelOn, unsigned busiest)
+    {
+        if (panelOn || busiest >= 35) {
+            quiet_ = 0;
+            low_ = false;
+        } else if (busiest >= 20) {
+            quiet_ = 0;
+        } else if (quiet_ < 4 && ++quiet_ == 4) {
+            low_ = true;
+        }
+        return low_;
+    }
+    unsigned quietSamples() const { return quiet_; }
 };

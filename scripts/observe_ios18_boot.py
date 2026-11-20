@@ -63,6 +63,8 @@ def observe(kernel, layout_path, output, interval, duration, once=False, skip_th
                     '_native_adreno_io_coherent'))
                 report['globals'] = {name: int.from_bytes(memory.read(symbols[name], size), 'little')
                                      for name, size in fields if name in symbols}
+                if '_marble_display_features' in symbols:
+                    report['display_features'] = struct.unpack('<4I', memory.read(symbols['_marble_display_features'], 16))
                 report['gpu'] = {
                     name: struct.unpack('<' + 'I' * count, memory.read(symbols[name], count * 4))
                     for name, count in (
@@ -70,6 +72,16 @@ def observe(kernel, layout_path, output, interval, duration, once=False, skip_th
                         ('_native_adreno_table_switches', 8), ('_native_adreno_recovery', 8),
                         ('_native_adreno_view_diag', 6), ('_native_gpu_dcvs', 15),
                         ('_native_adreno_metal_diag', 24)) if name in symbols}
+                report['power'] = {
+                    name: struct.unpack('<' + kind * count,
+                                        memory.read(symbols[name], struct.calcsize(kind) * count))
+                    for name, kind, count in (
+                        ('_marble_system_sleep', 'Q', 24), ('_marble_system_sleep_wait', 'Q', 8),
+                        ('_marble_cpu_idle_power', 'Q', 24), ('_marble_cpu_screen_budget', 'I', 8),
+                        ('_marble_cpu_l3_power', 'Q', 8), ('_marble_gpu_idle_power', 'Q', 16),
+                        ('_marble_backlight_stats', 'I', 8), ('_marble_backlight_request', 'I', 4),
+                        ('_marble_charge_source_stats_v2', 'I', 20), ('_native_touch_idle_clears', 'Q', 2))
+                    if name in symbols}
                 report['buttons'] = {
                     name: struct.unpack('<' + 'I' * count, memory.read(symbols[name], count * 4))
                     for name, count in (('_marble_buttons_stats', 64), ('_marble_buttons_hid_stats', 8))

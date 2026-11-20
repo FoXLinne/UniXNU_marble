@@ -76,6 +76,7 @@ enum : uint32_t {
     RingStampOffset = 512,    /* the timeline slots in the fence page: 64 of 16 bytes */
     RingFenceWords = 7,       /* kernel bring-up submissions: TYPE4 scratch + TYPE7 event */
     RingFramedFenceWords = 31,/* user submissions: scratch, BV timestamp, BR wait, ring timestamp */
+    RingFenceFlushWords = 3,
     /* CP preemption between rings (a6xx_preempt.c, a6xx_gpu.c a6xx_emit_set_pseudo_reg): CP_SET_PSEUDO_REG (0x56) with the
      * SMMU info (written by the CPU on each switch), the non-secure save address (this ring's preemption record), the
      * non-privileged save address and the counters (both unused: 0). CP_CONTEXT_SWITCH_YIELD (0x6b, four words) ends a
@@ -279,8 +280,9 @@ IOReturn NativeAdrenoRing::emitFramedFence(uint32_t at,uint32_t seqno,uint32_t *
 IOReturn NativeAdrenoRing::emitFramedFence(uint32_t at,uint32_t seqno,uint32_t *end,bool yield)
 {
     const uint32_t mask=(uint32_t)(ring_bytes_/4-1);
-    uint32_t words[RingFramedFenceWords+RingStampWords+RingYieldWords]={0};
-    const uint32_t total=RingFramedFenceWords+(stamps_?RingStampWords:0)+(yield?RingYieldWords:0);
+    uint32_t words[RingFramedFenceWords+RingFenceFlushWords+RingStampWords+RingYieldWords]={0};
+    const uint32_t total=RingFramedFenceWords+(flush_before_fence_?RingFenceFlushWords:0)+
+        (stamps_?RingStampWords:0)+(yield?RingYieldWords:0);
     if(AdrenoPM4Type4(RingScratch,1,&words[0])!=AdrenoPM4Success)return poison();
     words[1]=seqno;
     /* The timestamp goes to +4 (msm_rbmemptrs.fence), where wait() reads it; +0 is the CP's RPTR shadow. */
@@ -298,6 +300,12 @@ IOReturn NativeAdrenoRing::emitFramedFence(uint32_t at,uint32_t seqno,uint32_t *
     if(n)n=packet(words,n,RingFenceOpcode,bvWrite,4);
     if(n)n=packet(words,n,RingThreadControl,&br,1);
     if(n)n=packet(words,n,RingWaitTimestamp,bvWait,4);
+    if(n && flush_before_fence_) {
+        // Publish consumer-visible writes after both threads finish their work.
+        const uint32_t flush=RingCacheFlush7;
+        n=packet(words,n,RingFenceOpcode,&flush,1);
+        if(n)n=packet(words,n,RingWaitForIdle,nullptr,0);
+    }
     if(n)n=packet(words,n,RingFenceOpcode,fence,4);
     if(n)n=packet(words,n,RingThreadControl,&both,1);
     if(n)n=packet(words,n,RingSetMarker,&marker,1);
@@ -572,7 +580,8 @@ IOReturn NativeAdrenoRing::submitWords(const uint32_t *words,size_t word_count,u
     const bool reset=framed && reset_pending_,table=reset && table_pending_;
     /* A plain (kernel) submission cannot carry the switch: a pending table waits for the next framed one. */
     const uint32_t extra=framed?RingPrologueWords+(reset?RingResetWords:0)+(table?RingTableWords-(4-table_update_words_)+(preempt_?RingTableSnapshotWords:0):0)+RingFramedFenceWords+
-        (stamps_?2*RingStampWords:0)+(preempt_?RingPseudoWords+RingYieldWords:0):RingFenceWords;
+        (flush_before_fence_?RingFenceFlushWords:0)+(stamps_?2*RingStampWords:0)+
+        (preempt_?RingPseudoWords+RingYieldWords:0):RingFenceWords;
     if(word_count>size_words-extra-8)return kIOReturnNoResources;
     uint32_t rptr=0;IOReturn status=readRptr(&rptr);
     if(status)return status;

@@ -355,6 +355,10 @@ class CommandProcessor {
         PE_parse_boot_argn("sheng-diag",&diag,sizeof(diag));
         if(!PE_parse_boot_argn("sheng-gpu-timeline",&timeline,sizeof(timeline)))timeline=diag==1;
         ring.setTimeline(timeline!=0);
+        unsigned flushBeforeFence=0;
+        PE_parse_boot_argn("marble-fence-flush", &flushBeforeFence, sizeof(flushBeforeFence));
+        ring.setFlushBeforeFence(flushBeforeFence==1);
+        backgroundRing.setFlushBeforeFence(flushBeforeFence==1);
         PE_parse_boot_argn("sheng-gpu-preempt", &preemptMode, sizeof(preemptMode));
         if (preemptMode && !restarting) {
             backgroundRing.setTableUpdateWords(3);

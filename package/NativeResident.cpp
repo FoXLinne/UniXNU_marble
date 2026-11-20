@@ -65,6 +65,18 @@ static const ROOT_STAGE_TABLE *residentTable;
 extern "C" const ROOT_STAGE_TABLE *native_resident_table(void) {return residentTable;}
 static volatile ROOT_STAGE_USB_HOST *usb_host;
 static volatile ROOT_STAGE_USB_KERNEL *usb_kernel;
+static bool usbDoorbell;
+static int usbControlEvent;
+extern "C" {
+volatile uint64_t marble_usb_control_stats[4];  // doorbell, requests, waits, interrupts
+void native_resident_usb_doorbell(void);
+}
+
+extern "C" void native_resident_usb_doorbell(void)
+{
+  ++marble_usb_control_stats[3];
+  thread_wakeup(&usbControlEvent);
+}
 
 static void refreshUsbHost(void)
 {
@@ -128,11 +140,18 @@ extern "C" bool native_resident_prepare(void)
   return return_stub!=0;
 }
 
-extern "C" bool native_resident_wake_requested(void)
+extern "C" bool native_resident_usb_has_doorbell(void);
+extern "C" bool native_resident_usb_has_doorbell(void)
 {
-  if (!usb_host || !usb_kernel) return false;
+  return usbDoorbell;
+}
+
+extern "C" uint32_t native_resident_pending_wake_command(void);
+extern "C" uint32_t native_resident_pending_wake_command(void)
+{
+  if (!usb_host || !usb_kernel) return 0;
   refreshUsbHost();
-  return usb_host->Sequence != usb_kernel->Completed && usb_host->Command != 0;
+  return usb_host->Sequence != usb_kernel->Completed ? usb_host->Command : 0;
 }
 
 static void usbControlWorker(void *, wait_result_t)
@@ -142,7 +161,10 @@ static void usbControlWorker(void *, wait_result_t)
     refreshUsbHost();
     uint32_t sequence=usb_host->Sequence;
     uint32_t request=sequence==usb_kernel->Completed ? 0 : usb_host->Command;
-    if (request) clock_interval_to_deadline(500,kMillisecondScale,&activeUntil);
+    if (request) {
+      ++marble_usb_control_stats[1];
+      if (!usbDoorbell) clock_interval_to_deadline(500,kMillisecondScale,&activeUntil);
+    }
     if (request==1) {
       usb_kernel->Completed=sequence;
       usb_kernel->Ready=0;
@@ -180,7 +202,16 @@ static void usbControlWorker(void *, wait_result_t)
       usb_kernel->Completed=sequence;
       publishUsbKernel();
     }
-    IOSleep(mach_absolute_time()<activeUntil ? 1 : 16);
+    if (usbDoorbell) {
+      // Publish the wait before rechecking the shared cache line. A command
+      // arriving in either order is handled before the worker can block.
+      assert_wait(&usbControlEvent,THREAD_UNINT);
+      if (native_resident_pending_wake_command()) clear_wait(current_thread(),THREAD_AWAKENED);
+      ++marble_usb_control_stats[2];
+      thread_block(THREAD_CONTINUE_NULL);
+    } else {
+      IOSleep(mach_absolute_time()<activeUntil ? 1 : 16);
+    }
   }
 }
 
@@ -193,6 +224,11 @@ extern "C" void native_resident_usb_control(const ROOT_STAGE_TABLE *table)
   usb_host=const_cast<ROOT_STAGE_USB_HOST *>(&table->UsbHost);
   usb_kernel=const_cast<ROOT_STAGE_USB_KERNEL *>(&table->UsbKernel);
   refreshUsbHost();
+#ifdef MARBLE_IOS18_GPU
+  usbDoorbell=usb_host->Reserved[MARBLE_USB_HOST_DOORBELL]==MARBLE_USB_DOORBELL_TAG;
+#endif
+  marble_usb_control_stats[0]=usbDoorbell;
+  if (usbDoorbell) usb_kernel->Reserved[MARBLE_USB_KERNEL_DOORBELL]=MARBLE_USB_DOORBELL_TAG;
   usb_kernel->Completed=0;
   usb_kernel->Ready=1;
   publishUsbKernel();

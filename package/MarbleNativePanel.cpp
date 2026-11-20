@@ -14,7 +14,7 @@ using UINTN=uintptr_t;using BOOLEAN=bool;
 volatile MARBLE_SCANOUT *mDisplay;
 IOMemoryMap *nativePanelMapping;
 volatile UINT32 *nativeMdp,*nativeDsi;
-UINT64 mDisplayFrequency,mPanelReadAt;
+UINT64 mDisplayFrequency;
 UINT32 mPanelBrightness=0x133,mPanelHz=60;
 BOOLEAN mPanelAsleep;
 UINT64 DisplayCounter() {

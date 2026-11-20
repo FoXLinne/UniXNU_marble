@@ -13,6 +13,7 @@
 #include <pexpert/pexpert.h>
 #include <kern/thread.h>
 #include "MarbleInputLatency.h"
+#include "MarbleDisplayFeatures.h"
 
 extern "C" kern_return_t OSKextLoadKextWithIdentifier(const char *);
 extern "C" kmod_info_t g_kernel_kmod_info;
@@ -39,11 +40,15 @@ extern "C" uint64_t native_legacy_surface_width(OSObject *), native_legacy_surfa
 extern "C" uint64_t native_legacy_surface_stride(OSObject *), native_legacy_surface_allocation(OSObject *);
 extern "C" uint32_t native_legacy_surface_format(OSObject *), native_legacy_surface_planes(OSObject *);
 #ifdef MARBLE_IOS18_GPU
-extern "C" void native_marble_panel_refresh_request(unsigned);
+extern "C" IOReturn native_marble_panel_set_refresh(uint32_t);
+static unsigned displayRefreshHz;
+
+extern "C" unsigned native_legacy_refresh_hz(void) { return displayRefreshHz; }
 #endif
 
 extern "C" {
 volatile uint32_t marble_display_stage, marble_display_registered, marble_display_clients;
+volatile uint32_t marble_display_features[4];
 volatile uint32_t marble_display_transfers, marble_display_retirements, marble_display_frames;
 volatile uint32_t marble_display_swap_stage, marble_display_validation, marble_display_rejections;
 uint32_t marble_display_rejected_request[24];
@@ -102,13 +107,18 @@ void native_marble_display_snapshot(void)
 {
     native_marble_touch_report(marble_touch_status, sizeof(marble_touch_status));
     if (!marble_display_mapping || !marble_display_pixels) return;
-    if (native_gop_scanout_snapshot(marble_display_pixels, marble_display_bytes)) {
-        marble_display_snapshot_ready = 1;
-        return;
+    if (!native_gop_scanout_snapshot(marble_display_pixels, marble_display_bytes)) {
+        native_legacy_direct_snapshot();
+        const volatile uint32_t *source = reinterpret_cast<const volatile uint32_t *>(marble_display_mapping);
+        for (uint64_t i = 0; i < marble_display_bytes / 4; ++i) marble_display_pixels[i] = source[i];
     }
-    native_legacy_direct_snapshot();
-    const volatile uint32_t *source = reinterpret_cast<const volatile uint32_t *>(marble_display_mapping);
-    for (uint64_t i = 0; i < marble_display_bytes / 4; ++i) marble_display_pixels[i] = source[i];
+    // RootStage invalidates its cache lines before reading this buffer. Write
+    // the rendered pixels back to the point of coherency before acknowledging.
+    const uintptr_t start = reinterpret_cast<uintptr_t>(marble_display_pixels);
+    const uintptr_t end = start + marble_display_bytes;
+    for (uintptr_t line = start & ~uintptr_t(63); line < end; line += 64)
+        __asm__ volatile("dc cvac, %0" :: "r"(line) : "memory");
+    __asm__ volatile("dsb sy" ::: "memory");
     marble_display_snapshot_ready = 1;
 }
 
@@ -327,6 +337,27 @@ void native_marble_display_start(void)
     OSString *grant = OSString::withCString("backboardd,SpringBoard,mediaserverd");
     if (!grant || !display->setProperty("NativeSandboxGrantProcess", grant)) panic("MarbleDisplay: access policy");
     grant->release();
+    // Report registered sources separately from board features with working providers.
+    const MarbleDisplayFeatureState features = marble_display_feature_state(1, 1, 0, 1, 0, 0);
+    marble_display_features[0] = features.features;
+    marble_display_features[1] = features.sources;
+    marble_display_features[2] = features.sensor_state;
+    marble_display_features[3] = features.color_pipeline;
+    display->setProperty("marble-display-features", features.features, 32);
+    display->setProperty("marble-display-feature-sources", features.sources, 32);
+    display->setProperty("marble-ambient-light-state", features.sensor_state, 32);
+    display->setProperty("marble-color-pipeline", "compositor");
+    unsigned requestedHz = 0;
+    PE_parse_boot_argn("sheng-vsync", &requestedHz, sizeof(requestedHz));
+    // Boot firmware leaves the panel at 60 Hz. Publish a higher cadence
+    // only after the panel timing transaction completes.
+    displayRefreshHz = requestedHz ? 60 : 0;
+    if (requestedHz == 90 || requestedHz == 120) {
+        const IOReturn mode = native_marble_panel_set_refresh(requestedHz);
+        if (mode == kIOReturnSuccess) displayRefreshHz = requestedHz;
+        IOLog("MarbleDisplay: panel request %u Hz, presentation %u Hz, status %x\n",
+              requestedHz, displayRefreshHz, mode);
+    }
     marble_display_stage = 3;
     SInt32 score = 0;
     if (display->probe(nub, &score) != display || !display->attach(nub)) panic("MarbleDisplay: probe");

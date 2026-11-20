@@ -92,7 +92,7 @@ void logLine(int level,const char *line) {
     }
     unsigned at=__atomic_fetch_add(&native_marble_wifi_text_count,1u,__ATOMIC_RELAXED)%128;
     snprintf(native_marble_wifi_text[at],160,"%llu %d %.130s",nowMs(),level,line);
-    if (level<=6) IOLog("MarbleWifi %s\n",line);
+    if (level<=4) IOLog("MarbleWifi %s\n",line);
 }
 void *heapAlloc(size_t n) {auto *p=static_cast<size_t *>(IOMallocData(n+16)); if (!p) return nullptr; *p=n+16; return reinterpret_cast<uint8_t *>(p)+16;}
 void heapFree(void *p) {if (p) {auto *base=static_cast<uint8_t *>(p)-16; IOFreeData(base,*reinterpret_cast<size_t *>(base));}}
@@ -209,7 +209,7 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
     if (!gDbiMap) {st[0]=-3; st[1]=ENOMEM; return;}
     gDbi=reinterpret_cast<volatile uint32_t *>(gDbiMap->getVirtualAddress());
     gDbi[0x828/4]=0;
-    int error=armcpu_spi_attach(32+141,false,msiInterrupt,nullptr,nullptr,nullptr);
+    int error=armcpu_spi_attach(MarbleWifiMsiInterrupt,false,msiInterrupt,nullptr,nullptr,nullptr);
     if (error) {st[0]=-3; st[1]=error; return;}
     gDbi[0x820/4]=gArena.iova; gDbi[0x824/4]=0;
     gDbi[0x830/4]=0xffffffffu; gDbi[0x82c/4]=0; gDbi[0x828/4]=0xffffffffu;
@@ -232,6 +232,7 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
     bool networkStarted=false;
     uint64_t slice=nowNs();
     uint64_t nextReport=0, nextRegistryReport=0;
+    unsigned publishedStationState=~0u;
     for (;;) {
         bool busy=nw_wifi_step();
         native_marble_wifi_power_stats[0]=1;
@@ -264,8 +265,10 @@ extern "C" void marble_wifi_runtime(volatile uint32_t *bar,size_t bytes,volatile
             native_marble_wifi_power_stats[12]=station.state; native_marble_wifi_power_stats[13]=nw_wifi_stats.scans;
             native_marble_wifi_power_stats[14]=nw_wifi_stats.frames; native_marble_wifi_power_stats[15]=nowMs();
             const uint64_t reportedAt=nowMs();
-            if (reportedAt>=nextRegistryReport) {
-                publishDiagnostics(); nextRegistryReport=reportedAt+5000;
+            if (station.state != publishedStationState || (displayOn && reportedAt >= nextRegistryReport)) {
+                publishDiagnostics();
+                nextRegistryReport=reportedAt+5000;
+                publishedStationState=station.state;
             }
             nextReport=reportedAt+idleMs;
         }

@@ -118,6 +118,19 @@ int main()
     }
     {
         reset();NativeAdrenoRing r;
+        CHECK(attach(r)==kIOReturnSuccess);
+        r.setFlushBeforeFence(true);
+        const uint32_t payload[]={0x11111111,0x22222222,0x33333333,0x44444444};
+        uint32_t sequence=0;
+        CHECK(r.submitFramed(payload,4,&sequence)==kIOReturnSuccess && sequence==1);
+        CHECK(peer.writes.back().second==49);
+        auto op=[](uint32_t header) {return (header>>16)&0x7fu;};
+        CHECK(op(ring[32])==0x14 && ring[36]==1);
+        CHECK(op(ring[37])==0x46 && ring[38]==0x32 && op(ring[39])==0x26);
+        CHECK(op(ring[40])==0x46 && ring[41]==(0x31u|(1u<<27)|(1u<<31)) && ring[44]==1);
+    }
+    {
+        reset();NativeAdrenoRing r;
         CHECK(r.attach(&io,&cache,ring,8192,0x100000,fence,sizeof(fence),0x108000)==kIOReturnSuccess);
         r.setTimeline(true);
         CHECK(r.setPreempt(0x300000,0x400000,0x108008)==kIOReturnSuccess);

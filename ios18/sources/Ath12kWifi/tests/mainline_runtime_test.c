@@ -189,6 +189,36 @@ static void power_and_scan_ordering(struct net_device *dev) {
   nw_mainline_run(); assert(scan_completions == 2); /* Scan cannot replace a queued disconnect either. */
   nw_wifi_power(1); nw_mainline_run();
 }
+static void reconnect_during_disconnect(void) {
+  const u8 ssid[] = "saved-network";
+  u8 bytes[64];
+  struct nw_control_builder builder;
+  struct nw_control_view view;
+  assert(!nw_control_begin(&builder, bytes, sizeof(bytes), NW_CONTROL_EVENT,
+    NW_CONTROL_DISCONNECTED, 0, 1, 1, 0));
+  assert(!nw_control_decode(bytes, builder.length, &view));
+
+  authorized_fixture();
+  nw_wifi_disconnect();
+  assert(disconnect_waiting && ui.operation == NW_CONTROL_DISCONNECT_REQUEST);
+  event(NW_CONTROL_DISCONNECTED, 0, &view);
+  assert(!disconnect_waiting && !ui.operation && status.state == NW_STA_IDLE);
+
+  authorized_fixture();
+  nw_wifi_disconnect();
+  memset(&ui, 0, sizeof(ui)); /* The worker dispatched the first disconnect. */
+  const unsigned previous_epoch = epoch;
+  nw_wifi_disconnect();
+  assert(disconnect_waiting && !ui.operation && epoch == previous_epoch);
+  event(NW_CONTROL_DISCONNECTED, 0, &view);
+  assert(!disconnect_waiting && status.state == NW_STA_IDLE);
+  assert(!nw_wifi_connect(ssid, sizeof(ssid) - 1, NULL, NULL, 0));
+  event(NW_CONTROL_DISCONNECTED, 0, &view);
+  assert(join_waiting && ui.operation == NW_CONTROL_JOIN_REQUEST && status.state == NW_STA_AUTH);
+  nw_wifi_power(1);
+  nw_mainline_run();
+}
+
 static void notification_boundary(struct net_device *dev) {
   uint64_t session; assert(!nw_wifi_control_attach(&session));
   u8 bytes[64]; struct nw_control_builder info;
@@ -241,7 +271,7 @@ int main(void) {
   assert(starts == 1 && interfaces == 1);
   assert(!nw_cfg80211_set_power(0)); assert(!netif_running(dev) && !interfaces && stops == 1);
   assert(!nw_cfg80211_set_power(1)); assert(netif_running(dev) && interfaces == 1 && starts == 2);
-  data_boundary(dev); power_and_scan_ordering(dev); join_channel_hint(); join_completion_and_signal(); notification_boundary(dev);
+  data_boundary(dev); power_and_scan_ordering(dev); reconnect_during_disconnect(); join_channel_hint(); join_completion_and_signal(); notification_boundary(dev);
   nw_mainline_shutdown(); ieee80211_unregister_hw(expected_hw); ieee80211_free_hw(expected_hw);
   lx_exit_ieee80211_exit(); lx_exit_cfg80211_exit();
   for (unsigned i = 0; i < 10; i++) { lx_pump(); ticks++; }

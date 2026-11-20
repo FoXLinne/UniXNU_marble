@@ -25,6 +25,7 @@
 #include "NativeGpuTrace.inc"
 
 extern "C" void proc_selfname(char *, int);
+extern "C" IOReturn native_marble_gpu_power_activity(bool, uint64_t) __attribute__((weak_import));
 /* The system's render server, the process that composes the display: backboardd on iPadOS, WindowServer on macOS. It gets the
  * reserved row 0 and its mailbox page, the cache export and its own report line. */
 #if defined(XNU_TARGET_OS_OSX) && XNU_TARGET_OS_OSX
@@ -213,7 +214,10 @@ static void nativeAdrenoHangcheck(void *,wait_result_t)
         IOSleep(500);
         IOLockLock(g.lock);
         bool hung=false;
-        if(g.submit && !g.submit->hangCheck(&hung) && hung) {
+        const IOReturn check = g.submit ? g.submit->hangCheck(&hung) : kIOReturnNotReady;
+        if (!check && !hung && native_marble_gpu_power_activity)
+            (void)native_marble_gpu_power_activity(true, g.submit->outstanding());
+        if (!check && hung) {
             native_adreno_recovery[0]=native_adreno_recovery[0]+1;
             if(g.restart) {
                 uint32_t fault[4]={};
@@ -748,7 +752,11 @@ static IOReturn runCore(AGXDeviceUserClient *connection,uint32_t method,const vo
         spans=native_adreno_bo_memory[1];
         if(connection->live_)connection->core_->offerSystemPages(pages.descriptor?&pages:nullptr);
         if(connection->live_ && freeing)connection->core_->collectFreedPages(&freed);
-        status=connection->live_?connection->core_->dispatch(method,input,input_size,output,output_size,&g.clock):kIOReturnNotReady;
+        status = kIOReturnSuccess;
+        if (connection->live_ && method == NativeAdrenoMethodSubmit && native_marble_gpu_power_activity)
+            status = native_marble_gpu_power_activity(false, g.submit->outstanding());
+        if (!status)
+            status=connection->live_?connection->core_->dispatch(method,input,input_size,output,output_size,&g.clock):kIOReturnNotReady;
         if(!status && method==NativeAdrenoMethodBoCpuMap && output && output_size==sizeof(NativeAdrenoAbiBoCpuMapReply)) {
             const auto &reply=*static_cast<const NativeAdrenoAbiBoCpuMapReply *>(output);
             const auto *view=connection->viewSlot(reply.token);
@@ -1186,7 +1194,10 @@ static IOReturn checkCpSwitch()
     /* The proof is of the first ring's CP switch, as before there were two rings. */
     g.submit->nextPriority(0);
     if(!status) {
-        status=g.submit->submit(space->vm(),&ib,1,0,&fence,&g.clock);
+        if (native_marble_gpu_power_activity)
+            status = native_marble_gpu_power_activity(false, g.submit->outstanding());
+        if (!status)
+            status=g.submit->submit(space->vm(),&ib,1,0,&fence,&g.clock);
         native_adreno_cp_check[2]=uint32_t(status);
         native_adreno_cp_check[5]=fence;
     }

@@ -34,19 +34,41 @@ constexpr uint32_t kMinNits=2,kMidNits=140,kMaxNits=500;
 constexpr uint32_t kBacklightOn=0xe0014100,kBacklightOff=0xe0014101;
 const OSMetaClass *appleClass;
 bool useAppleClass;
-uint64_t pendingBrightness;
+bool backlightOwnsPanel;
 }
 class MarbleBacklight : public IOService {
     OSDeclareDefaultStructors(MarbleBacklight)
     IOWorkLoop *loop=nullptr;
     IOTimerEventSource *timer=nullptr;
-    uint32_t level=kInitial,goal=kInitial,steps=0;
-    bool offRequested=false,asleep=false;
+    uint64_t pendingBrightness=0;
+    uint32_t level=kInitial,goal=kInitial,resumeLevel=kInitial,steps=0;
+    bool offRequested=false,asleep=false,systemOn=true;
     bool powerRegistered=false;
-    uint32_t notifiedPower=2;
-    void notifyPower(bool on) {
-        if (__atomic_exchange_n(&notifiedPower,uint32_t(on),__ATOMIC_ACQ_REL)!=uint32_t(on))
-            native_marble_display_backlight_state(on);
+
+    // Only this work loop changes panel power, the fade state and the level
+    // published to CoreBrightness. PM callbacks enter through the same gate.
+    IOReturn setPanelPower(bool on) {
+        if (on!=asleep) return kIOReturnSuccess;
+        const IOReturn status=native_legacy_panel_power(on);
+        marble_backlight_stats[6]=status;
+        if (status!=kIOReturnSuccess) return status;
+        asleep=!on;
+        __atomic_store_n(&marble_backlight_stats[7],uint32_t(on),__ATOMIC_RELEASE);
+        publishLevel(on?level:0);
+        native_marble_display_backlight_state(on);
+        return status;
+    }
+    IOReturn writeLevel(uint32_t next) {
+        if (level==next) return kIOReturnSuccess;
+        const IOReturn status=native_marble_panel_set_brightness(next);
+        marble_backlight_stats[3]=status;
+        if (status==kIOReturnSuccess) {
+            level=next;
+            marble_backlight_stats[2]=next;
+            ++marble_backlight_stats[4];
+            publishLevel(next);
+        }
+        return status;
     }
     static uint32_t clamp(uint64_t value) {return value<kMin?kMin:value>kMax?kMax:uint32_t(value);}
     void publishLevel(uint32_t value) {
@@ -91,40 +113,46 @@ class MarbleBacklight : public IOService {
     }
     static void update(OSObject *owner,IOTimerEventSource *) {
         auto *self=static_cast<MarbleBacklight *>(owner);
-        const uint64_t request=__atomic_exchange_n(&pendingBrightness,0,__ATOMIC_ACQ_REL);
+        const uint64_t request=__atomic_exchange_n(&self->pendingBrightness,0,__ATOMIC_ACQ_REL);
         if (request>>63) {
             self->goal=clamp(uint32_t(request));
             self->steps=uint32_t((request>>32)&0x3fffffff)/16;
             self->offRequested=(request&(1ULL<<62))!=0;
-            if (!self->offRequested) {
-                const IOReturn power=native_legacy_panel_power(1);
-                marble_backlight_stats[6]=power;
-                if (power!=kIOReturnSuccess) {marble_backlight_stats[3]=power;return;}
-                self->asleep=false;marble_backlight_stats[7]=1;
-                self->notifyPower(true);
-                if (self->powerRegistered) self->changePowerStateToPriv(1);
-            }
+            if (!self->offRequested) self->resumeLevel=self->goal;
         }
+        // A slider update received during system sleep supplies the resume
+        // level. Only the PM wake may turn the panel on in that state.
+        if (!self->systemOn || (self->asleep && self->offRequested)) {
+            self->steps=0;
+            return;
+        }
+        if (self->asleep && self->setPanelPower(true)!=kIOReturnSuccess) return;
         uint32_t next=self->goal;
         if (self->steps) {
             const int64_t delta=int64_t(self->goal)-self->level;
             next=clamp(int64_t(self->level)+delta/int64_t(self->steps));
             if (!--self->steps) next=self->goal;
         }
-        const IOReturn result=native_marble_panel_set_brightness(next);
-        marble_backlight_stats[3]=result;marble_backlight_stats[2]=next;
-        if (result==kIOReturnSuccess) {self->level=next;++marble_backlight_stats[4];self->publishLevel(self->asleep?0:next);}
-        if (result==kIOReturnSuccess && self->offRequested && !self->steps && !self->asleep) {
-            const IOReturn power=native_legacy_panel_power(0);
-            marble_backlight_stats[6]=power;
-            if (power==kIOReturnSuccess) {
-                self->asleep=true;marble_backlight_stats[7]=0;self->publishLevel(0);
-                self->notifyPower(false);
-                if (self->powerRegistered) self->changePowerStateToPriv(0);
-            }
-        }
-        if (self->steps || __atomic_load_n(&pendingBrightness,__ATOMIC_ACQUIRE)) self->timer->setTimeoutMS(16);
+        const IOReturn status=self->writeLevel(next);
+        if (!self->steps && self->offRequested) self->setPanelPower(false);
+        if ((status==kIOReturnSuccess && self->steps) ||
+            __atomic_load_n(&self->pendingBrightness,__ATOMIC_ACQUIRE)) self->timer->setTimeoutMS(16);
     }
+    static IOReturn setSystemPower(OSObject *owner,void *state,void *,void *,void *) {
+        auto *self=static_cast<MarbleBacklight *>(owner);
+        const bool on=state!=nullptr;
+        if (self->systemOn==on) return kIOReturnSuccess;
+        self->systemOn=on;
+        self->steps=0;
+        // A dark wake restores device power, not the user's display state.
+        // Only a positive brightness request clears a CoreBrightness blank.
+        const bool panelOn = on && !self->offRequested;
+        if (panelOn) self->goal=self->resumeLevel;
+        const IOReturn status=self->setPanelPower(panelOn);
+        if (status==kIOReturnSuccess && panelOn) return self->writeLevel(self->goal);
+        return status;
+    }
+
 public:
     bool start(IOService *provider) override {
         if (!IOService::start(provider)) return false;
@@ -148,28 +176,20 @@ public:
         if (registerPowerDriver(this,states,2)!=kIOReturnSuccess) {PMstop();return false;}
         powerRegistered=true;
         if (changePowerStateToPriv(1)!=kIOReturnSuccess) return false;
-        marble_backlight_stats[0]=3;marble_backlight_stats[2]=level;marble_backlight_stats[7]=1;
+        marble_backlight_stats[2]=level;
+        __atomic_store_n(&marble_backlight_stats[7],1u,__ATOMIC_RELEASE);
+        __atomic_store_n(&marble_backlight_stats[0],3u,__ATOMIC_RELEASE);
+        __atomic_store_n(&backlightOwnsPanel,true,__ATOMIC_RELEASE);
         registerService();IOLog("MarbleBacklight: DCS range=%u..%u initial=%u\n",kMin,kMax,level);
         return true;
     }
     IOReturn setPowerState(unsigned long state,IOService *) override {
-        if (state>1) return kIOReturnBadArgument;
-        const bool on=state!=0;
-        if (on==asleep) {
-            const IOReturn result=native_legacy_panel_power(state);
-            marble_backlight_stats[6]=result;
-            if (result!=kIOReturnSuccess) return result;
-            asleep=!on;
-            marble_backlight_stats[7]=on;
-            publishLevel(on?level:0);
-        }
-        // PM supplies the initial CurrentPowerState snapshot. Hardware
-        // transitions also deliver the legacy AppleARMBacklight messages
-        // consumed by Powerlog's display and application-time services.
-        notifyPower(on);
+        if (state>1 || !loop) return kIOPMAckImplied;
+        (void)loop->runAction(setSystemPower,this,reinterpret_cast<void *>(state));
         return kIOPMAckImplied;
     }
     void free() override {
+        __atomic_store_n(&backlightOwnsPanel,false,__ATOMIC_RELEASE);
         if (powerRegistered) PMstop();
         if (timer) timer->cancelTimeout();
         if (loop && timer) loop->removeEventSource(timer);
@@ -193,7 +213,8 @@ public:
         if (auto *fade=OSDynamicCast(OSNumber,properties->getObject("FadePeriod"))) {
             const uint64_t value=(uint64_t(fade->unsigned32BitValue())*1000)>>16;ms=value>5000?5000:uint32_t(value);
         }
-        ++marble_backlight_stats[1];marble_backlight_stats[5]=target;
+        __atomic_add_fetch(&marble_backlight_stats[1],1u,__ATOMIC_RELAXED);
+        marble_backlight_stats[5]=target;
         // CoreBrightness blanks the display with zero. Positive slider values
         // keep the panel's nonzero floor; a zero finishes its fade, then sleeps.
         marble_backlight_request[0]=kind;marble_backlight_request[1]=raw;
@@ -214,6 +235,10 @@ const OSMetaClass *MarbleBacklight::getMetaClass() const {
 }
 OSMetaClassConstructorInit(MarbleBacklight,IOService,)
 OSDefineDefaultStructors(MarbleBacklight,IOService)
+
+extern "C" bool native_marble_backlight_owns_panel(void) {
+    return __atomic_load_n(&backlightOwnsPanel,__ATOMIC_ACQUIRE);
+}
 
 extern "C" void native_marble_backlight_start(void) {
     if (marble_backlight_stats[0] || !native_marble_panel_control_available()) return;

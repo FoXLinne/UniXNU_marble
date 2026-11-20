@@ -1,0 +1,16 @@
+--- a/crates/metal2vulkan-runtime/src/buffer.rs
++++ b/crates/metal2vulkan-runtime/src/buffer.rs
+@@ -3570,7 +3570,12 @@
+     ) -> bool {
+         use ash::vk::Handle;
+         let _placement = self.making_texture();
+-        let Some(_pages) = self.host_pages() else { return true; };
++        let _pages = self.host_pages();
++        // Large runtime-owned buffers also use imported host pages, held by
++        // their fixed placement rather than a no-copy buffer's HostCell.
++        if _pages.is_none() && !self.in_fresh_pages() {
++            return true;
++        }
+         let (memory, offset, _) = self.memory();
+         synchronize(memory.as_raw(), offset, self.length())
+     }

@@ -14,6 +14,7 @@ extern "C" {
 #include "GeniSpi.h"
 #include "SmmuBypass.h"
 void native_touch_publish(unsigned count, const uint8_t *points);
+void native_touch_cancel(void);
 void native_marble_touch_start(void);
 IOReturn armcpu_spi_attach(uint32_t, bool, void (*)(void *), void *, uint32_t *, uint64_t *);
 }
@@ -465,7 +466,7 @@ struct Touch {
 void worker(void *, wait_result_t) {
     auto *touch = new Touch;
     int result = touch ? touch->run() : GENI_ERR_IO;
-    native_touch_publish(0, nullptr);
+    native_touch_cancel();
     if (touchPin) {
         touchPin[2] &= ~1u;
         touchPin[3] = 0;

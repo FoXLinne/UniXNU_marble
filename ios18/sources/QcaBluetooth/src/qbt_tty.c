@@ -386,8 +386,9 @@ static int bt_tty_power_on_sysctl SYSCTL_HANDLER_ARGS
 }
 SYSCTL_PROC(_kern,OID_AUTO,qbt_power_on,CTLTYPE_INT|CTLFLAG_RD|CTLFLAG_LOCKED,NULL,0,bt_tty_power_on_sysctl,"I","WCN7850 startup request");
 
-int qbt_transport_init(const struct qbt_transport_ops *ops)
+int qbt_transport_init(const struct qbt_transport_ops *ops, uint32_t baud)
 {
+    (void)baud;
     if(!ops || !ops->wake || !ops->power)return EINVAL;
     lck_mtx_lock(&bt_tty_lock);
     if(bt_ops.wake){lck_mtx_unlock(&bt_tty_lock);return EALREADY;}

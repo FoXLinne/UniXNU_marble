@@ -38,8 +38,21 @@ static bool legacy(uint32_t *submitted,uint32_t *retired) {
 }
 static bool (*queryDetail)(uint32_t *,uint32_t *,uint32_t *)=detail;
 static bool (*queryLegacy)(uint32_t *,uint32_t *)=legacy;
+static bool ownerKnown;
+static unsigned native_legacy_owner_idle_swaps;
+static uint32_t ownerSubmitted,ownerRetired;
+static bool ownerDetail(int32_t owner,uint32_t *submitted,uint32_t *retired,uint32_t *extra) {
+    (void)owner;
+    extra[2]=2;
+    if(ownerKnown){*submitted=ownerSubmitted;*retired=ownerRetired;}
+    return ownerKnown;
+}
+static bool (*queryOwner)(int32_t,uint32_t *,uint32_t *,uint32_t *)=nullptr;
+static void (*swapCancelled)()=nullptr;
 #define native_adreno_fences_detail (*queryDetail)
 #define native_adreno_fences (*queryLegacy)
+#define native_adreno_owner_fences (*queryOwner)
+#define native_marble_input_swap_cancelled (*swapCancelled)
 enum {GpuTraceDisplayFence=22};
 static unsigned lastReason;
 template<class... Args> static void gpuTraceEvent(unsigned,unsigned,uint64_t,unsigned reason,Args...) {lastReason=reason;}
@@ -50,12 +63,16 @@ struct Timer {
 };
 struct Display {
     const OriginalLegacySwapRequest *fenceFor=nullptr,*gpuRequest=nullptr,*validated[8]={};
+    const OriginalLegacySwapRequest *latchRequest=nullptr;
+    uint32_t validatedFences[8]={};
+    bool validatedFenceCaptured[8]={};
     uint32_t fenceTarget=0;
     uint64_t fenceSince=0;
     bool fenceCaptured=false,fenceSlow=false,traceGpuComplete=false,gpuRetired=false,transferred=false;
     Timer timer;
     Timer *fenceTimer=&timer;
     unsigned waits=0,passed=0;
+    int32_t requestOwner(const OriginalLegacySwapRequest *) {return queryOwner==ownerDetail?17:0;}
     uint64_t traceId(const OriginalLegacySwapRequest *) {return 1;}
     void stat(unsigned) {}
     void note(unsigned event,int,const OriginalLegacySwapRequest *) {if(event==2)++waits;if(event==3)++passed;}
@@ -85,6 +102,31 @@ int main() {
     query(false,0,0,0);assert(!d.gpuWrote(&a)); // Provider not yet published.
     query(true,0,0);assert(d.gpuWrote(&a)); // A successful empty snapshot is complete.
 
+    // An owner-specific query may be valid before that process submits the frame.
+    // Fence zero must remain pending until the first real owner fence appears.
+    OriginalLegacySwapRequest c;
+    queryOwner=ownerDetail;ownerKnown=true;ownerSubmitted=0;ownerRetired=0;
+    assert(!d.gpuWrote(&c) && !d.fenceCaptured && d.timer.delay==2000);
+    ownerSubmitted=55;ownerRetired=54;
+    assert(!d.gpuWrote(&c) && d.fenceCaptured && d.fenceTarget==55);
+    ownerRetired=55;
+    assert(d.gpuWrote(&c) && d.traceGpuComplete);
+    // A process with no queued GPU jobs (including already reaped jobs) must
+    // release the queue head after the brief grace window.
+    ownerSubmitted=0;ownerRetired=55;
+    assert(!d.gpuWrote(&c) && d.timer.delay==2000);
+    clockNow+=1999999;
+    assert(!d.gpuWrote(&c) && d.timer.delay==1);
+    clockNow+=1;
+    assert(d.gpuWrote(&c) && native_legacy_owner_idle_swaps==1);
+    // A captured real fence keeps its target even if its owner is now idle.
+    ownerSubmitted=56;assert(!d.gpuWrote(&c));
+    ownerSubmitted=0;
+    clockNow+=250000000;
+    assert(!d.gpuWrote(&c) && d.fenceTarget==56 && d.timer.delay==8000);
+    ownerRetired=56;assert(d.gpuWrote(&c));
+    queryOwner=nullptr;
+
     // Passing 250 ms records the slow wait once, without presenting the frame.
     query(true,120,119);assert(!d.gpuWrote(&a));
     const uint32_t slow=native_legacy_direct[12];
@@ -98,9 +140,9 @@ int main() {
     query(true,140,139);assert(!d.gpuWrote(&a));
     query(false,0,0,1);assert(!d.gpuWrote(&b) && !d.fenceCaptured && !d.fenceTarget && !d.fenceSlow);
     query(true,150,149);assert(!d.gpuWrote(&b) && d.fenceTarget==150);
-    d.validated[0]=&b;d.gpuRequest=&b;d.transferred=true;d.gpuRetired=true;
+    d.validated[0]=&b;d.gpuRequest=&b;d.latchRequest=&b;d.transferred=true;d.gpuRetired=true;
     assert(d.cancelSwapsAfterTimeout() && !d.timer.delay && !d.fenceFor && !d.fenceCaptured);
-    assert(!d.validated[0] && !d.gpuRequest && !d.transferred && !d.gpuRetired && !d.traceGpuComplete);
+    assert(!d.validated[0] && !d.gpuRequest && !d.latchRequest && !d.transferred && !d.gpuRetired && !d.traceGpuComplete);
     // The family may reuse the cancelled request address.
     query(true,160,159);assert(!d.gpuWrote(&b) && d.fenceTarget==160);
     query(true,161,160);assert(d.gpuWrote(&b));

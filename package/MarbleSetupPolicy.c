@@ -76,6 +76,11 @@ static int writePreference(proc_t process, user_addr_t scratch, const char *name
 
 static int refreshDisplayCache(proc_t process, user_addr_t scratch)
 {
+    // A change to the emulated device identity may require one migration.
+    // Normal boots keep the cache that the system generated for that identity.
+    unsigned refresh = 0;
+    if (!PE_parse_boot_argn("marble-refresh-display-cache", &refresh, sizeof(refresh)) || refresh != 1)
+        return 0;
     unsigned scale = 0;
     if (!PE_parse_boot_argn("marble-display-scale", &scale, sizeof(scale)) || !scale) return 0;
     unsigned identity = 0;

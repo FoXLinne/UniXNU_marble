@@ -23,8 +23,7 @@
 extern "C" int armcpu_spi_attach(uint32_t,bool,void(*)(void *),void *,uint32_t *,uint64_t *);
 extern "C" int armcpu_spi_share(uint32_t,void(*)(void *),void *);
 extern "C" int armcpu_spi_mask(uint32_t,bool);
-extern "C" volatile int native_gpu_addon_stage;
-extern "C" volatile uint32_t native_marble_wifi_stats[24];
+extern "C" volatile int marble_addon_install_result;
 extern "C" {
 volatile uint64_t native_bluetooth_stats[32];
 /* Connection metadata survives controller power cycles. No addresses, link
@@ -34,6 +33,11 @@ volatile uint64_t native_bluetooth_stats[32];
  */
 volatile uint64_t native_bluetooth_link_events[128][8];
 volatile uint32_t native_bluetooth_link_event_count;
+/* Per-direction HCI ACL frame and byte counts, without ACL payloads. */
+volatile uint64_t native_bluetooth_acl_stats[4];
+/* The connection timeline survives bursts of scan reconfiguration. */
+volatile uint64_t native_bluetooth_connection_events[64][8];
+volatile uint32_t native_bluetooth_connection_event_count;
 uint8_t native_bluetooth_boot_rx[512];
 volatile uint32_t native_bluetooth_boot_rx_length;
 uint8_t native_bluetooth_boot_tail[256];
@@ -68,6 +72,9 @@ constexpr size_t kTlmmBytes=0x100000;
 static_assert((kXo+1)*4096u<=kTlmmBytes,"Bluetooth GPIO exceeds the TLMM mapping");
 constexpr uint32_t kBtEnableCfg=(7u<<6)|(1u<<9); // bt-en-pins: 16 mA, no bias, output
 constexpr uint32_t kDmaBytes=32768;
+constexpr uint32_t kOperatingBaud=3000000;
+constexpr uint64_t kStartupGraceNs=5000000000ULL;
+constexpr uint64_t kDisconnectGraceNs=500000000ULL;
 bool map(Region &r,uint64_t base,size_t bytes) {
     if(r.va)return true;
     IODeviceMemory *memory=IODeviceMemory::withRange(base,bytes);
@@ -77,35 +84,69 @@ bool map(Region &r,uint64_t base,size_t bytes) {
 }
 void barrier(){__asm__ volatile("dsb sy" ::: "memory");}
 uint64_t nowNs(void *){uint64_t ns;absolutetime_to_nanoseconds(mach_absolute_time(),&ns);return ns;}
-void linkEvent(unsigned direction,unsigned code,unsigned handle,unsigned status,unsigned flags,unsigned length) {
-    uint32_t sequence=__atomic_add_fetch(&native_bluetooth_link_event_count,1u,__ATOMIC_RELAXED);
-    volatile uint64_t *row=native_bluetooth_link_events[(sequence-1)%128];
-    row[0]=0;row[1]=nowNs(nullptr);row[2]=direction;row[3]=code;
-    row[4]=handle;row[5]=status;row[6]=flags;row[7]=length;
-    __atomic_store_n(&row[0],sequence,__ATOMIC_RELEASE);
+static bool connectionOpcode(unsigned opcode) {
+    switch (opcode) {
+    case 0x0405: case 0x0406: case 0x0408: case 0x0409: case 0x040a:
+    case 0x0411: case 0x0413: case 0x0419: case 0x041b: case 0x041c:
+    case 0x041d: case 0x041f: case 0x042b: case 0x0434: case 0x042c:
+    case 0x042d: case 0x200d: case 0x200e: case 0x2043:
+        return true;
+    default:
+        return false;
+    }
+}
+static void putEvent(volatile uint64_t (*ring)[8], unsigned count, volatile uint32_t *counter,
+    unsigned direction, unsigned code, unsigned handle, unsigned status, unsigned flags, unsigned length) {
+    uint32_t sequence = __atomic_add_fetch(counter, 1u, __ATOMIC_RELAXED);
+    volatile uint64_t *row = ring[(sequence - 1) % count];
+    row[0] = 0;
+    row[1] = nowNs(nullptr);
+    row[2] = direction;
+    row[3] = code;
+    row[4] = handle;
+    row[5] = status;
+    row[6] = flags;
+    row[7] = length;
+    __atomic_store_n(&row[0], sequence, __ATOMIC_RELEASE);
+}
+void linkEvent(unsigned direction, unsigned code, unsigned handle, unsigned status, unsigned flags, unsigned length) {
+    putEvent(native_bluetooth_link_events, 128, &native_bluetooth_link_event_count,
+        direction, code, handle, status, flags, length);
+    if (direction == 2 || (direction == 0 && code <= 0xff) || connectionOpcode(code))
+        putEvent(native_bluetooth_connection_events, 64, &native_bluetooth_connection_event_count,
+            direction, code, handle, status, flags, length);
+}
+static bool initializationOpcode(unsigned opcode) {
+    return (opcode >= 0x0c00 && opcode < 0x2100) || (opcode & 0xfc00) == 0xfc00;
 }
 void traceHci(void *,bool tx,uint8_t type,const uint8_t *p,size_t n) {
+    if (bt.initializing) return;
+    if (type == 2 && n == 4) {
+        unsigned dir = tx ? 2 : 0;
+        native_bluetooth_acl_stats[dir] = native_bluetooth_acl_stats[dir] + 1;
+        native_bluetooth_acl_stats[dir + 1] = native_bluetooth_acl_stats[dir + 1] + (p[2] | (unsigned)p[3] << 8);
+        return;
+    }
     if(tx && type==1 && n>=3) {
         unsigned op=p[0]|unsigned(p[1])<<8;
-        switch(op) {
-        case 0x0405:case 0x0406:case 0x0411:case 0x042b:case 0x0434:
-        case 0x042c:case 0x042d:case 0x200d:case 0x2043:case 0x200e:break;
-        default:return;
-        }
+        if (!initializationOpcode(op) && !connectionOpcode(op)) return;
         unsigned handle=(op==0x0406 || op==0x0411) && n>=5 ? p[3]|unsigned(p[4])<<8 : 0;
         unsigned status=op==0x0434 && n>=10?p[9]:0;
         unsigned flags=op==0x042b && n>=12?p[9]|unsigned(p[10])<<8|unsigned(p[11])<<16:0;
+        if (op == 0x0405 && n >= 16) {
+            unsigned packet_type = p[9] | (unsigned)p[10] << 8;
+            flags = packet_type | ((unsigned)(p[11] & 3) << 16) |
+                ((unsigned)(p[14] >> 7) << 18) | ((unsigned)(p[15] & 1) << 19);
+        } else if ((op == 0x2042 || op == 0x200c) && n >= 5) {
+            flags = p[3] | ((unsigned)p[4] << 8);
+        }
         linkEvent(1,op,handle,status,flags,(unsigned)n-3);return;
     }
     if(type!=4 || n<2)return;
     unsigned ev=p[0],handle=0,status=0,flags=0;
     if((ev==0x0e || ev==0x0f) && n>=6) {
         unsigned at=ev==0x0e?3:4,op=p[at]|unsigned(p[at+1])<<8;
-        switch(op) {
-        case 0x0405:case 0x0406:case 0x0411:case 0x042b:case 0x0434:
-        case 0x042c:case 0x042d:case 0x200d:case 0x2043:case 0x200e:break;
-        default:return;
-        }
+        if (!initializationOpcode(op) && !connectionOpcode(op)) return;
         linkEvent(0,op,0,p[ev==0x0e?5:2],ev,(unsigned)n-2);return;
     }
     switch(ev) {
@@ -166,7 +207,7 @@ void pin(unsigned gpio,uint32_t cfg,int output=-1) {
 }
 void rxIrq(void *) {
     volatile uint32_t *r=bt.tlmm.va+kRx*4096/4;
-    if(!(r[3]&1))return;
+    if (!(r[2] & 1) || !(r[3] & 1)) return;
     r[2]&=~1u;r[3]=0;barrier();
     __atomic_store_n(&bt.rx_wake,1u,__ATOMIC_RELEASE);wake(nullptr);
 }
@@ -296,7 +337,7 @@ bool address() {
         uint32_t wire=0,baud=0;
         if(encoding && encoding->getLength()==4)memcpy(&wire,encoding->getBytesNoCopy(),4);
         if(speed && speed->getLength()==4)memcpy(&baud,speed->getBytesNoCopy(),4);
-        if(node && wire==1 && baud==3000000) {
+        if(node && wire==1 && baud==kOperatingBaud) {
             published=chosen->setProperty("mac-address-bluetooth0",bt.address,6) &&
                 node->setProperty("local-mac-address",bt.address,6);
             if(published && !bt.radio) {
@@ -434,7 +475,7 @@ int powerOn() {
         native_bluetooth_boot_state[0]=linePins();
         native_bluetooth_boot_state[1]=__atomic_load_n(&native_bluetooth_boot_rx_length,__ATOMIC_ACQUIRE);
     }
-    e=qbt_boot(bt.core,3000000,bt.address);bt.initializing=false;
+    e=qbt_boot(bt.core,kOperatingBaud,bt.address);bt.initializing=false;
     if(bt.log>=2) {
         static const uint32_t regs[]={0x40,0x610,0x640,0xc40,0xd40,0x800,0xd54};
         native_bluetooth_boot_state[2]=linePins();
@@ -463,7 +504,9 @@ int powerOff() {
 }
 int requestPower(void *,bool enabled) {
     uint32_t expected=0;
-    if(!__atomic_compare_exchange_n(&bt.power_request,&expected,enabled?1u:2u,false,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE))return EBUSY;
+    const uint32_t request = enabled ? 1u : 2u;
+    if (!__atomic_compare_exchange_n(&bt.power_request, &expected, request, false,
+        __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) return expected == request ? 0 : EBUSY;
     linkEvent(2,1,0,0,enabled,0);
     wake(nullptr);return 0;
 }
@@ -480,81 +523,113 @@ void powerResult(bool enabled,int error) {
     printf("[bluetooth] power=%u result=%d baud=%u\n",enabled,error,info.baud);
     if(error && bt.geni.error)printf("[bluetooth uart] error=%d irq=%x/%x/%x/%x\n",bt.geni.error,bt.geni.fault_irq[0],bt.geni.fault_irq[1],bt.geni.fault_irq[2],bt.geni.fault_irq[3]);
 }
-void worker(void *,wait_result_t) {
-    thread_set_thread_name(current_thread(),"marble-bluetooth");
-    native_bluetooth_stats[10]=2;
-    while(native_gpu_addon_stage<5)IOSleep(50);
-    if(!address()) {
-        native_bluetooth_stats[0]=3;
-        native_bluetooth_stats[1]=(uint64_t)(int64_t)-ENOENT;
+void sampleController() {
+    struct qbt_stats stats;
+    qbt_get_stats(bt.core, &stats);
+    native_bluetooth_stats[2] = bt.baud;
+    native_bluetooth_stats[3] = stats.tx_bytes;
+    native_bluetooth_stats[4] = stats.rx_bytes;
+    native_bluetooth_stats[5] = bt.geni.stats.interrupts;
+    native_bluetooth_stats[6] = stats.timeouts;
+    native_bluetooth_stats[7] = stats.clock_sleeps;
+    native_bluetooth_stats[8] = bt.domain.slot;
+    native_bluetooth_stats[9] = bt.domain.bank;
+    native_bluetooth_stats[15] = bt.geni.stats.line_errors;
+    native_bluetooth_stats[16] = bt.geni.stats.dma_errors;
+    native_bluetooth_stats[20] = unsigned(bt.powered) | (unsigned(bt.gated) << 1) | (unsigned(bt.clocked) << 2);
+    native_bluetooth_stats[21] = marble_wcn_power_owners();
+    for (unsigned i = 0; i < 4; i++) native_bluetooth_stats[22 + i] = bt.geni.fault_irq[i];
+    native_bluetooth_stats[26] = stats.malformed;
+    native_bluetooth_stats[27] = stats.unmatched_events;
+    native_bluetooth_stats[28] = bt.geni.stats.rx_dma;
+    native_bluetooth_stats[29] = bt.geni.stats.tx_dma;
+}
+void worker(void *, wait_result_t) {
+    thread_set_thread_name(current_thread(), "marble-bluetooth");
+    native_bluetooth_stats[10] = 2;
+    const uint64_t addonDeadline = nowNs(nullptr) + 30000000000ULL;
+    int addon;
+    while ((addon = __atomic_load_n(&marble_addon_install_result, __ATOMIC_ACQUIRE)) == 0 &&
+           nowNs(nullptr) < addonDeadline) waitUntil(nullptr, addonDeadline);
+    int error = addon < 0 ? -addon : addon == 0 ? ETIMEDOUT : address() ? 0 : ENOENT;
+    if (error) {
+        native_bluetooth_stats[0] = 3;
+        native_bluetooth_stats[1] = (uint64_t)(int64_t)-error;
+        printf("[bluetooth] configuration error=%d\n", error);
         return;
     }
-    native_bluetooth_stats[10]=3;
+    native_bluetooth_stats[10] = 3;
     struct qbt_platform ops={nullptr,allocate,release,nowNs,writeUart,drained,setRate,flow,clockVote,pump,waitUntil,nativeRx,firmware,firmwarePut,log,traceHci,QBT_WCN6855};
-    bt.core=qbt_create(&ops);if(!bt.core){native_bluetooth_stats[0]=3;return;}
-    struct qbt_transport_ops transport={nullptr,wake,requestPower};
-    int e=qbt_transport_init(&transport);if(e){native_bluetooth_stats[0]=3;return;}
-    native_bluetooth_stats[10]=4;
-    /* Wi-Fi settles WLAN_EN and the shared supplies first; its failure stage is negative. */
-    unsigned wifi=0;PE_parse_boot_argn("marble-wifi",&wifi,sizeof(wifi));
-    if(wifi>=2) {
-        uint64_t end=nowNs(nullptr)+15000000000ULL;
-        while(nowNs(nullptr)<end) {
-            int32_t stage=(int32_t)native_marble_wifi_stats[0];
-            if(stage<0 || stage>=7)break;
-            IOSleep(50);
-        }
+    bt.core = qbt_create(&ops);
+    if (!bt.core) error = ENOMEM;
+    struct qbt_transport_ops transport = {nullptr, wake, requestPower};
+    if (!error) error = qbt_transport_init(&transport, kOperatingBaud);
+    if (error) {
+        if (bt.core) qbt_destroy(bt.core);
+        native_bluetooth_stats[0] = 3;
+        native_bluetooth_stats[1] = (uint64_t)(int64_t)-error;
+        printf("[bluetooth] transport error=%d\n", error);
+        return;
     }
-    e=powerOn();if(e)(void)powerOff();powerResult(true,e);
-    uint64_t health=nowNs(nullptr)+1000000000ULL,closeAt=0;
-    bool hadSession=false;
-    for(;;) {
-        uint32_t command=__atomic_exchange_n(&bt.power_request,0u,__ATOMIC_ACQ_REL);
-        if(command){
-            /* A new boot request retires the previous session's shutdown timer. */
-            closeAt=0;hadSession=false;
-            e=command==1?powerOn():powerOff();
-            if(e && command==1)(void)powerOff();powerResult(command==1,e);
+    native_bluetooth_stats[0] = 0;
+    native_bluetooth_stats[10] = 4;
+    printf("[bluetooth] UART.SK registered, awaiting native session\n");
+    uint64_t closeAt = 0;
+    bool hadSession = false;
+    for (;;) {
+        const uint32_t command = __atomic_exchange_n(&bt.power_request, 0u, __ATOMIC_ACQ_REL);
+        if (command) {
+            const bool enabled = command == 1;
+            error = enabled ? powerOn() : powerOff();
+            if (error && enabled) (void)powerOff();
+            powerResult(enabled, error);
+            closeAt = bt.powered ? nowNs(nullptr) + kStartupGraceNs : 0;
+            hadSession = false;
         }
-        if(bt.powered) {
-            pump(nullptr);bool connected=qbt_transport_connected();
-            if(connected!=bt.service){qbt_set_service(bt.core,connected);bt.service=connected;}
-            /* Ring teardown is also used while native H4 reconfigures its pipe.
-             * The control socket owns power for the entire native session.
-             */
-            if(connected){hadSession=true;closeAt=0;}
-            else if(hadSession && !closeAt)closeAt=nowNs(nullptr)+500000000ULL;
-            uint8_t tx[2048];size_t room=qbt_transmit_capacity(bt.core);
-            if(room>sizeof(tx))room=sizeof(tx);
-            if(room){uint32_t n=qbt_transport_tx_take(tx,(uint32_t)room);if(n && qbt_transmit(bt.core,tx,n))e=-EIO;}
+        if (bt.powered) {
+            pump(nullptr);
+            const bool connected = qbt_transport_connected();
+            if (connected != bt.service) {
+                qbt_set_service(bt.core, connected);
+                bt.service = connected;
+            }
+            if (connected) {
+                hadSession = true;
+                closeAt = 0;
+            } else if (hadSession && !closeAt) {
+                closeAt = nowNs(nullptr) + kDisconnectGraceNs;
+            }
+            uint8_t tx[2048];
+            const size_t room = qbt_transmit_capacity(bt.core);
+            const uint32_t count = room ? qbt_transport_tx_take(tx, room < sizeof(tx) ? (uint32_t)room : sizeof(tx)) : 0;
+            if (count && qbt_transmit(bt.core, tx, count)) qbt_fail(bt.core, -EIO);
             qbt_step(bt.core);
-            struct qbt_info info;qbt_get_info(bt.core,&info);
-            if(info.state==3 || bt.geni.state==QBT_GENI_FAILED || (closeAt && nowNs(nullptr)>=closeAt)) {
-                int error=info.state==3?info.error:bt.geni.error;
-                (void)powerOff();powerResult(false,error);closeAt=0;hadSession=false;
+            struct qbt_info info;
+            qbt_get_info(bt.core, &info);
+            const bool due = closeAt && nowNs(nullptr) >= closeAt && !qbt_transport_connected();
+            if (info.state == 3 || bt.geni.state == QBT_GENI_FAILED || due) {
+                error = info.state == 3 ? info.error : bt.geni.error;
+                const int cleanup = powerOff();
+                powerResult(false, error ? error : cleanup);
+                closeAt = 0;
+                hadSession = false;
             }
         }
-        uint64_t t=nowNs(nullptr);
-        if(t>=health) {
-            struct qbt_stats stats;qbt_get_stats(bt.core,&stats);
-            native_bluetooth_stats[2]=bt.baud;native_bluetooth_stats[3]=stats.tx_bytes;native_bluetooth_stats[4]=stats.rx_bytes;
-            native_bluetooth_stats[5]=bt.geni.stats.interrupts;native_bluetooth_stats[6]=stats.timeouts;native_bluetooth_stats[7]=stats.clock_sleeps;
-            native_bluetooth_stats[8]=bt.domain.slot;native_bluetooth_stats[9]=bt.domain.bank;
-            native_bluetooth_stats[20]=(unsigned)bt.powered|((unsigned)bt.gated<<1)|((unsigned)bt.clocked<<2);
-            native_bluetooth_stats[21]=marble_wcn_power_owners();
-            for(unsigned i=0;i<4;i++)native_bluetooth_stats[22+i]=bt.geni.fault_irq[i];
-            native_bluetooth_stats[26]=stats.malformed;native_bluetooth_stats[27]=stats.unmatched_events;
-            native_bluetooth_stats[28]=bt.geni.stats.rx_dma;native_bluetooth_stats[29]=bt.geni.stats.tx_dma;
-            native_bluetooth_stats[15]=bt.geni.stats.line_errors;native_bluetooth_stats[16]=bt.geni.stats.dma_errors;
-            health=t+1000000000ULL;
+        sampleController();
+        uint64_t deadline = bt.powered ? qbt_deadline(bt.core) : UINT64_MAX;
+        const uint64_t serialDeadline = bt.powered && !bt.gated ? qbt_geni_deadline(&bt.geni) : UINT64_MAX;
+        if (serialDeadline < deadline) deadline = serialDeadline;
+        if (closeAt && closeAt < deadline) deadline = closeAt;
+        if (!deadline) {
+            thread_yield_to_preemption();
+            continue;
         }
-        uint64_t deadline=bt.powered?qbt_deadline(bt.core):UINT64_MAX;
-        uint64_t geni=bt.powered && !bt.gated?qbt_geni_deadline(&bt.geni):UINT64_MAX;
-        if(geni<deadline)deadline=geni;if(health<deadline)deadline=health;if(closeAt && closeAt<deadline)deadline=closeAt;
-        if(!deadline){thread_yield_to_preemption();continue;}
-        waitUntil(nullptr,deadline);
+        waitUntil(nullptr, deadline);
     }
 }
+}
+extern "C" void native_marble_bluetooth_addon_ready(void) {
+    wake(nullptr);
 }
 struct proc;
 extern "C" {

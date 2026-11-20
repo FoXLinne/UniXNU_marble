@@ -21,12 +21,38 @@ PROFILE = json.loads((DEVICE / 'profiles/gpu-22H384.json').read_text())
 ORIGINS = {entry['name']: entry for entry in json.loads((DEVICE / 'source_origins.json').read_text())['sources']}
 SOURCES = {name: ORIGINS['ios18-build' if name == 'UniXNU' else name]['upstream_commit']
            for name in PROFILE['sources']}
-PROFILE['translator'].update(commit=ORIGINS['metal2vulkan']['upstream_commit'],
-                             branch=ORIGINS['metal2vulkan'].get('upstream_branch', 'development'))
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def translator_patch_inputs():
+    return {name: sha(DEVICE / name) for name in PROFILE['translator']['patches']}
+
+
+def stage_translator(gpu):
+    snapshot = PROFILE['translator']['snapshot']
+    patches = translator_patch_inputs()
+    patch_id = hashlib.sha256(''.join(patches.values()).encode()).hexdigest()
+    tree_id = subprocess.check_output(
+        ['git', '-C', DEVICE, 'rev-parse', '--verify', snapshot], text=True).strip()
+    destination = gpu / f'metal2vulkan-{tree_id[:12]}-{patch_id[:12]}'
+    if not destination.is_dir():
+        with tempfile.TemporaryDirectory(prefix='translator-', dir=gpu) as temporary:
+            archive = Path(temporary) / 'source.tar'
+            tree = Path(temporary) / 'tree'
+            tree.mkdir()
+            subprocess.run(['git', '-C', DEVICE, 'archive', '-o', archive, snapshot], check=True)
+            subprocess.run(['tar', '-xf', archive, '-C', tree], check=True)
+            for patch in patches:
+                subprocess.run(['git', 'apply', DEVICE / patch], cwd=tree, check=True)
+            try:
+                tree.rename(destination)
+            except FileExistsError:
+                if not destination.is_dir():
+                    raise
+    return destination
 
 
 def phone_ui(root):
@@ -101,12 +127,11 @@ def source_tree(root):
     shared = DEVICE.parent / 'UniXNU/.cache'
     for path in shared.iterdir():
         target = cache / path.name
-        if path.name != 'gpu-reference' and not target.exists():
+        if path.name != 'gpu-reference' and path.suffix != '.log' and not target.exists():
             target.symlink_to(path.resolve(), target_is_directory=path.is_dir())
     reference = cache / 'gpu-reference'
     reference.mkdir(exist_ok=True)
-    translator = gpu / 'metal2vulkan-runtime'
-    stage_ios18('metal2vulkan', translator)
+    translator = stage_translator(gpu)
     translator_link = reference / 'metal2vulkan'
     if translator_link.is_symlink() and translator_link.resolve() != translator.resolve():
         translator_link.unlink()
@@ -347,11 +372,12 @@ def userspace(root):
     owner.write_bytes(module)
     (root / 'gpu/userspace.json').write_text(json.dumps(dict(
         sources={**SOURCES, 'Mesa': ORIGINS['ios18-Mesa']['upstream_commit'],
-                 'metal2vulkan': ORIGINS['metal2vulkan']['upstream_commit']},
+                 'metal2vulkan': PROFILE['translator']['commit']},
         target='arm64e-apple-ios18.0', addon=str(addon), addon_sha256=sha(addon),
         trust_cache=str(owner), trust_cache_sha256=sha(owner), cdhashes=trust,
         primelist_entries=len(libraries), translator=PROFILE['translator']['commit'],
-        translator_patch_sha256=sha(DEVICE / PROFILE['translator']['patch']),
+        translator_snapshot=PROFILE['translator']['snapshot'],
+        translator_patches_sha256=translator_patch_inputs(),
         quartzcore_metallib_sha256=sha(quartzcore),
         turnip_sha256=sha(build / 'mesa-tu-ios18/src/freedreno/vulkan/libvulkan_freedreno.dylib')),
         indent=2) + '\n')

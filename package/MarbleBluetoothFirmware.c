@@ -8,7 +8,7 @@
 #include <sys/kauth.h>
 #include <IOKit/IOLib.h>
 #include "MarbleBluetoothFirmware.h"
-extern volatile int native_gpu_addon_stage;
+extern volatile int marble_addon_install_result;
 static bool firmware_name(const char *name) {
     if(!name || strncmp(name,"qca/",4))return false;
     name+=4;size_t n=strlen(name);if(n<8 || n>40)return false;
@@ -22,7 +22,7 @@ int marble_bt_firmware_read(const char *name,uint8_t **data,size_t *size) {
     if(!data || !size)return EINVAL;
     *data=NULL;*size=0;
     if(!firmware_name(name))return ENOENT;
-    if(native_gpu_addon_stage<1)return EAGAIN;
+    if (__atomic_load_n(&marble_addon_install_result, __ATOMIC_ACQUIRE) != 1) return EAGAIN;
     char path[160];snprintf(path,sizeof(path),"%s/%s",MARBLE_BT_FIRMWARE_ROOT,name+4);
     vfs_context_t ctx=vfs_context_kernel();vnode_t vp=NULL;
     int error=vnode_open(path,FREAD,0,0,&vp,ctx);uint8_t *buffer=NULL;size_t length=0;

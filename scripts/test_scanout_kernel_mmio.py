@@ -7,7 +7,9 @@ import tempfile
 
 device = Path(__file__).resolve().parents[1]
 source = (device / 'package/MarbleScanout.cpp').read_text()
-flip = source[source.index('IOReturn scanoutFlip('):source.index('IOReturn flip(')]
+flip_start = source.index('IOReturn scanoutFlip(')
+flip_end = source.index('// Called with scanoutLock held, after the DCS sleep-in completes.', flip_start)
+flip = source[flip_start:flip_end]
 flip = re.sub(r'__asm__ volatile\(.*?\);', '(void)0;', flip, flags=re.S)
 program = r'''
 #include <cassert>
@@ -24,6 +26,9 @@ static volatile MARBLE_SCANOUT *mailbox=&state;
 static MarbleScanoutLayout layout;
 static uint64_t ticks;
 static int sleeps,latchedAfter=2;
+static uint32_t savedTiming, deferredSlot;
+static bool hasDeferredFlip;
+static volatile uint64_t marble_scanout_idle_stats[4];
 static uint64_t mach_absolute_time() {return ticks;}
 static void absolutetime_to_nanoseconds(uint64_t value,uint64_t *out) {*out=value;}
 static void IOSleep(unsigned ms) {

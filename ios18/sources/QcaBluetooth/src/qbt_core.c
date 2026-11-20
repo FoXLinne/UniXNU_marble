@@ -6,7 +6,7 @@
 #define SLEEP_IND 0xfe
 #define WAKE_IND 0xfd
 #define WAKE_ACK 0xfc
-static uint64_t now(struct qbt *q) { return q->ops.now_ns(q->ops.context); }
+static uint64_t now(const struct qbt *q) { return q->ops.now_ns(q->ops.context); }
 static bool drained(struct qbt *q) { return q->ops.uart_drained(q->ops.context); }
 static int clock_on(struct qbt *q) {
     if (q->clock_on) return 0;
@@ -53,8 +53,12 @@ static int discovery_command(unsigned opcode)
 static bool trace_command(unsigned opcode)
 {
     return discovery_command(opcode) >= 0 || opcode == 0x0402 ||
+        (opcode >= 0x0c00 && opcode < 0x2100) || (opcode & 0xfc00) == 0xfc00 ||
         opcode == 0x0c01 || opcode == 0x0c03 || opcode == 0x0c45 || opcode == 0x2001 ||
-        opcode == 0x0405 || opcode == 0x0406 || opcode == 0x0411 ||
+        opcode == 0x0405 || opcode == 0x0406 || opcode == 0x0408 ||
+        opcode == 0x0409 || opcode == 0x040a || opcode == 0x0411 ||
+        opcode == 0x0413 || opcode == 0x0419 || opcode == 0x041b ||
+        opcode == 0x041c || opcode == 0x041d || opcode == 0x041f ||
         opcode == 0x042b || opcode == 0x0434 || opcode == 0x042c || opcode == 0x042d ||
         opcode == 0x200d || opcode == 0x2043 || opcode == 0x200e;
 }
@@ -77,16 +81,17 @@ static void trace_event(struct qbt *q, const uint8_t *p, unsigned n)
 static size_t tx_advance(struct qbt_tx_frame *, const uint8_t *, size_t,
                          struct qbt_discovery_stats *);
 
-/* Reassemble only command bytes accepted by the UART. IBS and ACL payloads
- * never enter the trace, including frames split across DMA submissions. */
+/* Trace accepted command bytes and ACL headers across DMA submissions. */
 static void trace_tx(struct qbt *q, const uint8_t *p, size_t n,
                      struct qbt_tx_frame before)
 {
     if (!q->ops.trace_hci) return;
     for (size_t i = 0; i < n; ++i) {
         bool type = before.type == 1;
+        bool acl_header_complete = before.type == 2 && before.need == 1;
         bool start = !before.type && p[i] == 1;
         (void)tx_advance(&before, p + i, 1, NULL);
+        if (acl_header_complete) q->ops.trace_hci(q->ops.context, true, 2, before.header, 4);
         if (start) q->trace_command_length = 0;
         else if (type && q->trace_command_length < sizeof(q->trace_command))
             q->trace_command[q->trace_command_length++] = p[i];
@@ -141,6 +146,104 @@ static size_t tx_advance(struct qbt_tx_frame *f, const uint8_t *p, size_t n,
     }
     return i;
 }
+/* Classic Connection Complete reports the peer's address even on Page Timeout.
+ * A failed cached page may be retried with R2 scan repetition and no offset.
+ * Do not change the initial page, packet types, role policy or other peers. */
+static void note_page_result(struct qbt *q, const uint8_t *event, unsigned size)
+{
+    if (q->ops.controller_family != QBT_WCN6855 || size != 13 ||
+        event[0] != 0x03 || event[1] != 11 || event[11] != 1)
+        return;
+    const uint8_t *peer = event + 5;
+    if (event[2] == 0x04) {
+        memcpy(q->page_timeout_peer, peer, sizeof(q->page_timeout_peer));
+        q->page_timeout_until = now(q) + 30000000000ULL;
+    } else if (!event[2] && !memcmp(peer, q->page_timeout_peer, sizeof(q->page_timeout_peer))) {
+        q->page_timeout_until = 0;
+    }
+}
+
+static unsigned tx_index(const struct qbt *q, unsigned offset)
+{
+    return (q->tx_head + offset) % QBT_TX_CAPACITY;
+}
+
+/* Wait for a split H4 command before relying on its peer and clock fields. */
+static bool page_retry_ready(const struct qbt *q, uint64_t time)
+{
+    if (time >= q->page_timeout_until || q->tx_frame.type || !q->tx_length ||
+        q->tx[q->tx_head] != 1)
+        return true;
+    if (q->tx_length < 4)
+        return false;
+    return q->tx[tx_index(q, 1)] != 0x05 || q->tx[tx_index(q, 2)] != 0x04 ||
+        q->tx[tx_index(q, 3)] != 13 || q->tx_length >= 17;
+}
+
+static void prepare_page_retry(struct qbt *q, uint64_t time)
+{
+    if (time >= q->page_timeout_until || q->tx_frame.type || q->tx_length < 17 ||
+        q->tx[q->tx_head] != 1 || q->tx[tx_index(q, 1)] != 0x05 ||
+        q->tx[tx_index(q, 2)] != 0x04 || q->tx[tx_index(q, 3)] != 13 ||
+        !(q->tx[tx_index(q, 15)] & 0x80))
+        return;
+    for (unsigned i = 0; i < sizeof(q->page_timeout_peer); ++i) {
+        if (q->tx[tx_index(q, 4 + i)] != q->page_timeout_peer[i])
+            return;
+    }
+    q->tx[tx_index(q, 12)] = 2;
+    q->tx[tx_index(q, 14)] = 0;
+    q->tx[tx_index(q, 15)] = 0;
+}
+
+/* A WCN6855 active scan needs repeated reports for host-side discovery aging.
+ * Leave the controller's duplicate filter in place for passive scanning. */
+static bool scan_command_ready(const struct qbt *q)
+{
+    if (q->ops.controller_family != QBT_WCN6855 || q->tx_frame.type ||
+        !q->tx_length || q->tx[q->tx_head] != 1)
+        return true;
+    if (q->tx_length < 4)
+        return false;
+    unsigned opcode = q->tx[tx_index(q, 1)] | (unsigned)q->tx[tx_index(q, 2)] << 8;
+    unsigned length = q->tx[tx_index(q, 3)];
+    return !((opcode == 0x2041 && (length == 8 || length == 13)) ||
+             (opcode == 0x2042 && length == 6)) || q->tx_length >= length + 4;
+}
+
+static void prepare_scan_command(struct qbt *q)
+{
+    if (q->ops.controller_family != QBT_WCN6855 || q->tx_frame.type ||
+        q->tx_length < 10 || q->tx[q->tx_head] != 1 || q->tx[tx_index(q, 2)] != 0x20)
+        return;
+    uint8_t opcode = q->tx[tx_index(q, 1)];
+    unsigned length = q->tx[tx_index(q, 3)];
+    if (opcode == 0x41 && (length == 8 || length == 13)) {
+        uint8_t phys = q->tx[tx_index(q, 6)];
+        q->scan_params_pending = true;
+        q->scan_pending_active =
+            ((phys == 1 || phys == 4) && length == 8 && q->tx[tx_index(q, 7)] == 1) ||
+            (phys == 5 && length == 13 &&
+             (q->tx[tx_index(q, 7)] == 1 || q->tx[tx_index(q, 12)] == 1));
+    } else if (opcode == 0x42 && length == 6 && q->scan_active &&
+               q->tx[tx_index(q, 4)] == 1 && q->tx[tx_index(q, 5)] == 1) {
+        q->tx[tx_index(q, 5)] = 0;
+    }
+}
+
+static void note_scan_result(struct qbt *q, const uint8_t *event, unsigned size)
+{
+    if (size != 6 || event[0] != 0x0e)
+        return;
+    if (event[3] == 0x41 && event[4] == 0x20 && q->scan_params_pending) {
+        if (!event[5])
+            q->scan_active = q->scan_pending_active;
+        q->scan_params_pending = false;
+    } else if (event[3] == 0x03 && event[4] == 0x0c && !event[5]) {
+        q->scan_params_pending = q->scan_active = false;
+    }
+}
+
 static void event(struct qbt *q) {
     const uint8_t *e = q->event; unsigned n = q->event_length;
     trace_event(q, e, n);
@@ -169,6 +272,8 @@ static void event(struct qbt *q) {
     }
     if (q->service && !q->drop) {
         discovery_event(&q->stats.discovery, e, n);
+        note_page_result(q, e, n);
+        note_scan_result(q, e, n);
         q->forward[0] = 4; memcpy(q->forward + 1, e, n);
         q->forward_length = n + 1;
     } else q->stats.unmatched_events++;
@@ -213,6 +318,8 @@ size_t qbt_receive(struct qbt *q, const uint8_t *data, size_t length) {
                 (q->header[2] | (unsigned)q->header[3] << 8) & (t == 5 ? 0x3fff : 0xffff);
             q->drop = q->drop || !q->service || (t == 2 &&
                 (q->header[0] | (unsigned)q->header[1] << 8) == 0x2edc);
+            if (t == 2 && !q->drop && q->ops.trace_hci)
+                q->ops.trace_hci(q->ops.context, false, 2, q->header, 4);
             if (t == 4) { memcpy(q->event, q->header, 2); q->event_length = 2; }
             else if (!q->drop) { q->forward[0] = t; memcpy(q->forward + 1, q->header, q->header_length); q->forward_length = q->header_length + 1; }
             if (!q->body && t == 4) event(q);
@@ -246,7 +353,9 @@ size_t qbt_transmit_capacity(const struct qbt *q) {
 void qbt_step(struct qbt *q) {
     if (q->info.state == 3) return;
     (void)flush(q);
-    uint64_t t = now(q); bool pending = q->command_length || (q->service && q->tx_length);
+    uint64_t t = now(q);
+    bool host_ready = q->service && q->tx_length && scan_command_ready(q) && page_retry_ready(q, t);
+    bool pending = q->command_length || host_ready;
     /* A control byte needs the UART clock as much as a packet does. */
     if (pending || q->control_length) {
         int e = clock_on(q);
@@ -271,7 +380,13 @@ void qbt_step(struct qbt *q) {
     if (!q->ibs || q->tx_state == QBT_AWAKE) {
         const uint8_t *p = NULL; size_t n = 0; bool cmd = q->command_length != 0;
         if (cmd) { p = q->command + q->command_offset; n = q->command_length - q->command_offset; }
-        else if (q->service && q->tx_length) { p = q->tx + q->tx_head; n = QBT_TX_CAPACITY - q->tx_head; if (n > q->tx_length) n = q->tx_length; }
+        else if (host_ready) {
+            prepare_page_retry(q, t);
+            prepare_scan_command(q);
+            p = q->tx + q->tx_head;
+            n = QBT_TX_CAPACITY - q->tx_head;
+            if (n > q->tx_length) n = q->tx_length;
+        }
         if (n) {
             if (n > QBT_CHUNK) n = QBT_CHUNK;
             struct qbt_tx_frame preview=q->tx_frame;
@@ -285,18 +400,21 @@ void qbt_step(struct qbt *q) {
             else { q->tx_head = (q->tx_head + (unsigned)used) % QBT_TX_CAPACITY; q->tx_length -= (unsigned)used; }
             if (used) q->idle_at = t + QBT_TX_IDLE;
         }
-        if (q->ibs && !q->command_length && !q->tx_length && !q->control_length &&
+        if (q->ibs && !pending && !q->control_length &&
             !q->tx_frame.type && q->tx_state == QBT_AWAKE && q->idle_at && t >= q->idle_at && drained(q)) {
             control(q, SLEEP_IND); q->tx_state = QBT_ASLEEP; q->idle_at = 0; q->stats.sleep_ind++;
         }
     }
-    if (q->ibs && q->tx_state == QBT_ASLEEP && !q->rx_awake && !q->tx_length &&
-        !q->command_length && !q->control_length && !q->tx_frame.type && q->clock_on && drained(q)) {
+    /* DMA may hand over only part of a frame. Keep the receiver available
+     * until the remaining bytes arrive, even if the peer wake state is idle. */
+    if (q->ibs && q->tx_state == QBT_ASLEEP && !q->rx_awake && !pending &&
+        !q->header_need && !q->body && !q->command_length && !q->control_length &&
+        !q->tx_frame.type && q->clock_on && drained(q)) {
         if (!q->ops.clock(q->ops.context, false)) {
             q->clock_on = false; q->stats.clock_sleeps++;
             /* The platform services the UART while it stops it and may hand over bytes through qbt_receive. A wake
              * indication among them leaves an acknowledgement to send and a peer that is awake: the clock goes back on. */
-            if (q->info.state != 3 && (q->control_length || q->rx_awake)) {
+            if (q->info.state != 3 && (q->control_length || q->rx_awake || q->header_need || q->body)) {
                 q->stats.clock_reverts++;
                 int e = clock_on(q);
                 if (e) qbt_fail(q, e);
@@ -310,16 +428,26 @@ uint64_t qbt_deadline(const struct qbt *q) {
     /* Zero asks for another step at once, so it is given only while the UART takes bytes: after a refused write the
      * next attempt waits for write_retry_at. */
     if (q->control_length && !q->tx_frame.type && idle) return q->write_retry_at;
-    if ((q->command_length || (q->service && q->tx_length)) && idle && q->tx_state != QBT_WAKING) return q->write_retry_at;
+    uint64_t deadline = UINT64_MAX;
+    if (idle && q->tx_state != QBT_WAKING) {
+        if (q->command_length) return q->write_retry_at;
+        if (q->service && q->tx_length && scan_command_ready(q)) {
+            if (page_retry_ready(q, now(q))) return q->write_retry_at;
+            deadline = q->page_timeout_until;
+        }
+    }
     if (q->tx_state == QBT_WAKING && q->retry_at) return q->retry_at;
-    if (q->ibs && !q->tx_frame.type && q->tx_state == QBT_AWAKE && q->idle_at && idle) return q->idle_at;
-    return UINT64_MAX;
+    if (q->ibs && !q->tx_frame.type && q->tx_state == QBT_AWAKE &&
+        q->idle_at && idle && q->idle_at < deadline) return q->idle_at;
+    return deadline;
 }
 void qbt_set_service(struct qbt *q, bool enabled) {
     q->service = enabled && q->info.state == 2;
     if (!q->service) {
         if(q->tx_frame.type){q->info.state=3;q->info.error=-ECANCELED;}
         q->drop = true;
+        q->page_timeout_until = 0;
+        q->scan_params_pending = q->scan_active = false;
         q->tx_head = q->tx_length = 0; q->forward_length = q->forward_offset = 0;
     }
 }

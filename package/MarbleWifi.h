@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 #pragma once
 #include <stdint.h>
+
+enum { MarbleWifiMsiInterrupt = 173 };
 #ifdef __cplusplus
 extern "C" {
 #endif

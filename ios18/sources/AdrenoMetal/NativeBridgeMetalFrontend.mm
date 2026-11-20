@@ -835,6 +835,10 @@ static NSString *compileArgument(NSString *text) {
  NSString *escaped=[[text stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"] stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
  return [NSString stringWithFormat:@"\"%@\"",escaped];
 }
+@interface MTLCompileOptions (NBCompilerArguments)
+- (NSString *)additionalCompilerArguments;
+@end
+
 static NSString *compileArguments(MTLCompileOptions *options) {
  NSMutableArray<NSString *> *arguments=[NSMutableArray arrayWithObjects:@"--driver-mode=metal",@"-x",@"metal",nil];
  const NSUInteger version=options && options.languageVersion?(NSUInteger)options.languageVersion:(NSUInteger)MTLLanguageVersion3_1;
@@ -850,6 +854,11 @@ static NSString *compileArguments(MTLCompileOptions *options) {
  [options.preprocessorMacros enumerateKeysAndObjectsUsingBlock:^(NSString *name,NSObject *value,BOOL *) {
   [arguments addObject:compileArgument([NSString stringWithFormat:@"-D%@=%@",name,value])];
  }];
+ // Metal supplies a compiler argument string. Preserve its token boundaries and quoting.
+ if([options respondsToSelector:@selector(additionalCompilerArguments)]) {
+  NSString *additional=[options additionalCompilerArguments];
+  if(additional.length)[arguments addObject:additional];
+ }
  const std::string shared=sharedShaderCacheDirectory();
  NSString *moduleRoot=shared.empty()?NSTemporaryDirectory():@(shared.c_str());
  [arguments addObject:compileArgument([@"-fmodules-cache-path=" stringByAppendingString:[moduleRoot stringByAppendingPathComponent:@"m2v-msl"]])];
@@ -1385,6 +1394,46 @@ static void noteUnalignedTexture(MTLTextureDescriptor *d,NSUInteger offset,NSUIn
 @property(nonatomic,strong) NSData *bitCodeHashData;
 @property(nonatomic,strong) MTLFunctionConstantValues *constantValues;   // specialized with (nil: none), for the zero-rest rebuild of a refused pipeline
 @end
+
+static NSData *functionBitcode(NBFunction *function);
+static NSDictionary *reflectionJSON(NmbReflection *reflection,const char *what);
+
+@interface NBCallableType : NSObject
+@property(nonatomic,copy) NSString *typeName;
+@property(nonatomic) MTLDataType dataType;
+@property(nonatomic,copy) NSArray<NBCallableType *> *members;
+@end
+@implementation NBCallableType
+@end
+
+@interface NBCallableArgument : NSObject
+@property(nonatomic,copy) NSString *name;
+@property(nonatomic) MTLArgumentType type;
+@property(nonatomic,strong) NBCallableType *dataTypeDescription;
+@end
+@implementation NBCallableArgument
+@end
+
+static NBCallableType *callableType(id json) {
+ if(![json isKindOfClass:[NSDictionary class]])return nil;
+ NBCallableType *type=[NBCallableType new];
+ type.typeName=json[@"typeName"];
+ type.dataType=(MTLDataType)[json[@"dataType"] unsignedIntegerValue];
+ if(type.dataType==MTLDataTypeStruct) {
+  NSMutableArray<NBCallableType *> *members=[NSMutableArray array];
+  for(id entry in json[@"members"]) {
+   if(NBCallableType *member=callableType(entry))[members addObject:member];
+  }
+  type.members=members;
+ }
+ return type;
+}
+
+@interface NBFunction ()
+@property(nonatomic) BOOL loadedCallableReflection;
+@property(nonatomic,strong) NBCallableType *callableReturn;
+@property(nonatomic,copy) NSArray<NBCallableArgument *> *callableArguments;
+@end
 @interface NBFunctionConstant : MTLFunctionConstant
 @property(nonatomic,copy) NSString *name;
 @property(nonatomic) MTLDataType type;
@@ -1396,6 +1445,36 @@ static void noteUnalignedTexture(MTLTextureDescriptor *d,NSUInteger offset,NSUIn
 - (BOOL)isRequired {return self.required;}
 @end
 @implementation NBFunction
+- (void)loadCallableReflection {
+ @synchronized(self) {
+  if(_loadedCallableReflection)return;
+  _loadedCallableReflection=YES;
+  if(_functionType!=MTLFunctionTypeVisible && _functionType!=(MTLFunctionType)4)return;
+  NSData *air=functionBitcode(self);
+  if(!air.length)return;
+  NSDictionary *signature=reflectionJSON(nmb_callable_reflection(air.bytes,air.length,(_sourceName?:_name).UTF8String),
+                                         "callable function");
+  if(!signature)return;
+  _callableReturn=callableType(signature[@"returnType"]);
+  NSMutableArray<NBCallableArgument *> *arguments=[NSMutableArray array];
+  for(NSDictionary *entry in signature[@"arguments"]) {
+   NBCallableArgument *argument=[NBCallableArgument new];
+   argument.name=entry[@"name"];
+   argument.type=(MTLArgumentType)[entry[@"type"] unsignedIntegerValue];
+   argument.dataTypeDescription=callableType(entry[@"dataTypeDescription"]);
+   [arguments addObject:argument];
+  }
+  _callableArguments=[arguments copy];
+ }
+}
+- (id)returnType {
+ [self loadCallableReflection];
+ return _callableReturn;
+}
+- (NSArray *)arguments {
+ [self loadCallableReflection];
+ return _callableArguments;
+}
 - (NSDictionary<NSString *,MTLFunctionConstant *> *)functionConstantsDictionary {
  NSMutableDictionary *result=[NSMutableDictionary dictionary];
  if(!_handle)return result;
@@ -1409,15 +1488,22 @@ static void noteUnalignedTexture(MTLTextureDescriptor *d,NSUInteger offset,NSUIn
  return result;
 }
 - (void)dealloc {DetailSpan timing(8,(uintptr_t)_handle);if(_handle)nmb_function_release(_handle);}
-// _MTLFunction's bitCodeHash (32 bytes), read by the stitched-library path (createStitchingScriptHash): a digest naming this function
-// object, its name and a serial no other function in the process has.
+// Core Image uses this digest to cache stitched programs. Repeated lookups
+// of the same function must identify the same compiled input.
 - (const void *)bitCodeHash {
  @synchronized(self) {
   if(!_bitCodeHashData) {
-   static std::atomic<uint64_t> serial;
-   NSData *text=[[NSString stringWithFormat:@"%@#%llu",_name,(unsigned long long)++serial] dataUsingEncoding:NSUTF8StringEncoding];
+   NSData *air=functionBitcode(self);
+   NSData *name=[_name dataUsingEncoding:NSUTF8StringEncoding];
    NSMutableData *digest=[NSMutableData dataWithLength:CC_SHA256_DIGEST_LENGTH];
-   CC_SHA256(text.bytes,(CC_LONG)text.length,(unsigned char *)digest.mutableBytes);
+   CC_SHA256_CTX hash;
+   CC_SHA256_Init(&hash);
+   if(air.length)CC_SHA256_Update(&hash,air.bytes,(CC_LONG)air.length);
+   CC_SHA256_Update(&hash,name.bytes,(CC_LONG)name.length);
+   const char separator='\0';
+   CC_SHA256_Update(&hash,&separator,1);
+   CC_SHA256_Update(&hash,_constantsText.data(),(CC_LONG)_constantsText.size());
+   CC_SHA256_Final((unsigned char *)digest.mutableBytes,&hash);
    _bitCodeHashData=digest;
   }
   return _bitCodeHashData.bytes;
@@ -1564,6 +1650,9 @@ static bool forEachLibraryEntry(NBLibrary *library,const std::function<bool(cons
 // ci_filters) and links a kernel into its DAG only when its name is there or in a stitchable library; without the answer (nil, an unknown
 // selector) create_metal_dag gave a null program and iconservicesagent crashed in create_program_and_arguments. Apple's Metal on macOS
 // 26.5.1 answers 228 names for its ci_stdlib and 612 for ci_filters, none for a stitchable library.
+- (id<MTLFunction>)newExternFunctionWithName:(NSString *)name {
+ return (id<MTLFunction>)ciKernelFunction(self,name);
+}
 - (NSArray<NSString *> *)externFunctionNames {
  NSMutableArray<NSString *> *names=[NSMutableArray array];
  forEachLibraryEntry(self,[&](const std::string &entry,int type) {
@@ -4396,14 +4485,40 @@ static bool pipelineArchives(NSArray *list,std::vector<NmbBinaryArchive *> &arch
  if(!graphs.count || !functions.count){if(error)*error=nbError(@"a stitched library needs graphs and functions");return nil;}
  NSString *dag=[(id<NBOriginalStitching>)self newDagStringWithGraphs:graphs];
  if(!dag.length){if(error)*error=nbError(@"the stitching graphs have no DAG text");return nil;}
+ // A module can satisfy multiple graph references. Sending identical modules twice
+ // makes the linker see two definitions of each exported symbol.
+ NSMutableOrderedSet<NSData *> *modules=[NSMutableOrderedSet orderedSetWithCapacity:functions.count];
+ NSMutableDictionary<NSString *,NSString *> *sourceNames=[NSMutableDictionary dictionary];
+ for(id candidate in functions) {
+  NBFunction *function=[candidate isKindOfClass:[NBFunction class]]?candidate:nil;
+  NSData *bitcode=function?functionBitcode(function):nil;
+  if(!bitcode){if(error)*error=nbError([NSString stringWithFormat:@"stitched function %@ has no bitcode here",[candidate name]]);return nil;}
+  [modules addObject:bitcode];
+  if(function.sourceName.length && ![function.sourceName isEqualToString:function.name] && function.constantsText.empty())
+   sourceNames[function.name]=function.sourceName;
+ }
+ // The graph uses the descriptor's exported name. Raw AIR carries the
+ // source symbol when the descriptor supplied an alias without constants.
+ NSMutableString *linkedDag=[dag mutableCopy];
+ NSRange remaining=NSMakeRange(0,linkedDag.length);
+ while(sourceNames.count && remaining.length) {
+  NSRange start=[linkedDag rangeOfString:@"FUNCTION(" options:0 range:remaining];
+  if(start.location==NSNotFound)break;
+  NSUInteger symbolStart=NSMaxRange(start);
+  NSRange end=[linkedDag rangeOfString:@")" options:0 range:NSMakeRange(symbolStart,linkedDag.length-symbolStart)];
+  if(end.location==NSNotFound)break;
+  NSRange symbol=NSMakeRange(symbolStart,end.location-symbolStart);
+  NSString *sourceName=sourceNames[[linkedDag substringWithRange:symbol]];
+  if(sourceName)[linkedDag replaceCharactersInRange:symbol withString:sourceName];
+  NSUInteger next=symbolStart+(sourceName?sourceName.length:symbol.length)+1;
+  remaining=NSMakeRange(next,linkedDag.length-next);
+ }
  std::vector<uint8_t> request;
  auto word=[&](uint32_t v){const uint8_t *b=(const uint8_t *)&v;request.insert(request.end(),b,b+4);};
- const char *text=dag.UTF8String;
+ const char *text=linkedDag.UTF8String;
  word(0x64616720 /* 'dag ' */);request.insert(request.end(),text,text+strlen(text)+1);
- word(0x6e756d66 /* 'numf' */);word((uint32_t)functions.count);
- for(id function in functions) {
-  NSData *bitcode=[function isKindOfClass:[NBFunction class]]?functionBitcode((NBFunction *)function):nil;
-  if(!bitcode){if(error)*error=nbError([NSString stringWithFormat:@"stitched function %@ has no bitcode here",[function name]]);return nil;}
+ word(0x6e756d66 /* 'numf' */);word((uint32_t)modules.count);
+ for(NSData *bitcode in modules) {
   word(0x62697463 /* 'bitc' */);word((uint32_t)bitcode.length);
   const uint8_t *b=(const uint8_t *)bitcode.bytes;request.insert(request.end(),b,b+bitcode.length);
  }

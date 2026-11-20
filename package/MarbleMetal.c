@@ -11,6 +11,8 @@
 #include <kern/kalloc.h>
 #include <pexpert/pexpert.h>
 int native_marble_metal_prepare(proc_t, user_addr_t);
+extern void native_marble_bluetooth_addon_ready(void);
+volatile int marble_addon_install_result;
 boolean_t native_marble_haptics_vnode(vfs_context_t, vnode_t, struct componentname *);
 boolean_t native_marble_haptics_vnode(vfs_context_t context, vnode_t vnode, struct componentname *component)
 {
@@ -320,8 +322,11 @@ int native_marble_metal_prepare(proc_t process, user_addr_t scratch)
     PE_parse_boot_argn("sheng-gpu-addon", &enabled, sizeof(enabled));
     if (!enabled) return 0;
     native_gpu_addon_install(process, scratch);
-    if (native_gpu_addon_error || native_gpu_addon_files < 1)
-        return native_gpu_addon_error ? native_gpu_addon_error : ENOENT;
+    const int install_error = native_gpu_addon_error ? native_gpu_addon_error :
+        native_gpu_addon_files < 1 ? ENOENT : 0;
+    __atomic_store_n(&marble_addon_install_result, install_error ? -install_error : 1, __ATOMIC_RELEASE);
+    native_marble_bluetooth_addon_ready();
+    if (install_error) return install_error;
     static const char source[] = "/private/var/ngpu/addons";
     static const char target[] = "/System/Library/Extensions";
     native_gpu_addon_mount(process, scratch, 0x400, source, sizeof(source), target, sizeof(target),

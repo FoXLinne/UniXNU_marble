@@ -6,6 +6,7 @@
 #include <sys/systm.h>
 #include <kern/locks.h>
 #include <sys/kern_control.h>
+#include <sys/kauth.h>
 #include <sys/sysctl.h>
 #include <sys/mbuf.h>
 #include <sys/mcache.h>
@@ -19,7 +20,7 @@
 #include <kern/task.h>
 #define BT_SK_FIFO 8192u
 static struct qbt_transport_ops bt_ops;
-static uint32_t bt_sk_speed=115200;
+static uint32_t bt_sk_speed;
 static uint64_t bt_sk_kicks_tx,bt_sk_kicks_rx;
 static void bt_kick(void)
 {
@@ -51,7 +52,7 @@ static struct {
     int power_result;
     char firmware[64];
     uint64_t rx_dropped;
-} bt_sk={.boot=-1,.spec={2048,16,16}};
+} bt_sk={.boot=ENETDOWN,.spec={2048,16,16}};
 
 /* Native stack activity: power requests, boot-state reads, control connects, channel requests. */
 volatile uint32_t qbt_transport_activity[4];
@@ -95,6 +96,19 @@ static errno_t bt_sk_io_status(void)
     return bt_sk.boot<0?EAGAIN:bt_sk.boot;
 }
 
+/* Both control-socket open and BlueTool can request the same startup. */
+static int bt_sk_request_power_locked(void)
+{
+    if (!bt_ops.power) return ENXIO;
+    if (bt_sk.power_pending) return 0;
+    int error = bt_ops.power(bt_ops.context, true);
+    if (error) return error;
+    bt_sk.power_pending = true;
+    bt_sk.power_result = EINPROGRESS;
+    if (bt_sk.boot) bt_sk.boot = -1;
+    return 0;
+}
+
 /* UART owner side. A control session queues bytes before its RX ring exists.
  * Outside a live session bytes are discarded; a full FIFO applies backpressure. */
 uint32_t qbt_transport_receive(const uint8_t *data,uint32_t n)
@@ -120,6 +134,7 @@ uint32_t qbt_transport_tx_pending(void)
 uint32_t qbt_transport_tx_take(uint8_t *data,uint32_t max)
 {
     lck_mtx_lock(&bt_sk_lock);
+    if (bt_sk_io_status()) {lck_mtx_unlock(&bt_sk_lock);return 0;}
     uint32_t n=bt_sk.tx_len<max?bt_sk.tx_len:max;
     bt_sk_fifo_get(bt_sk.tx,&bt_sk.tx_head,&bt_sk.tx_len,data,n);
     if(n && bt_sk.txring && !bt_sk.closing) bt_sk_notify(bt_sk.txring);
@@ -156,8 +171,11 @@ static errno_t bt_sk_connected(kern_nexus_provider_t prov __unused,kern_nexus_t 
 static void bt_sk_pre_disconnect(kern_nexus_provider_t prov __unused,kern_nexus_t nexus,kern_channel_t channel __unused)
 {
     lck_mtx_lock(&bt_sk_lock);
-    if(bt_sk.nexus==nexus) bt_sk.closing=true;
-    while(bt_sk.busy) (void)msleep(&bt_sk.busy,&bt_sk_lock,PZERO,"btsk",NULL);
+    if (bt_sk.nexus == nexus) {
+        bt_sk.nexus = NULL;
+        bt_sk.rxring = bt_sk.txring = NULL;
+        while (bt_sk.busy) (void)msleep(&bt_sk.busy, &bt_sk_lock, PZERO, "btsk", NULL);
+    }
     lck_mtx_unlock(&bt_sk_lock);
     bt_kick();
 }
@@ -186,8 +204,16 @@ static errno_t bt_sk_sync_tx(kern_nexus_provider_t prov __unused,kern_nexus_t ne
     kern_channel_slot_t prev=NULL,slot;
     errno_t error=0;
     lck_mtx_lock(&bt_sk_lock);
-    error=bt_sk_io_status();
-    if(error) {lck_mtx_unlock(&bt_sk_lock);return error;}
+    if (bt_sk.txring != ring || !bt_sk.connected || bt_sk.closing) {
+        lck_mtx_unlock(&bt_sk_lock);
+        return ENOTCONN;
+    }
+    if (bt_sk.boot > 0) {
+        error = bt_sk.boot;
+        lck_mtx_unlock(&bt_sk_lock);
+        return error;
+    }
+    /* Keep initial HCI commands queued across asynchronous controller startup. */
     for(slot=kern_channel_get_next_slot(ring,NULL,NULL);slot && !bt_sk.closing;slot=kern_channel_get_next_slot(ring,slot,NULL)) {
         kern_packet_t ph=kern_channel_slot_get_packet(ring,slot);
         if(ph) {
@@ -215,7 +241,7 @@ static errno_t bt_sk_sync_rx(kern_nexus_provider_t prov __unused,kern_nexus_t ne
     kern_channel_slot_t prev=NULL,slot;kern_pbufpool_t pool=NULL;
     if(kern_nexus_get_pbufpool(nexus,NULL,&pool) || !pool) return 0;
     lck_mtx_lock(&bt_sk_lock);
-    errno_t error=bt_sk_io_status();
+    errno_t error = bt_sk.rxring == ring ? bt_sk_io_status() : ENOTCONN;
     if(error) {lck_mtx_unlock(&bt_sk_lock);return error;}
     (void)kern_channel_reclaim(ring);
     for(slot=kern_channel_get_next_slot(ring,NULL,NULL);slot && bt_sk.rx_len && !bt_sk.closing;slot=kern_channel_get_next_slot(ring,slot,NULL)) {
@@ -296,11 +322,12 @@ static errno_t bt_sk_connect(kern_ctl_ref ref __unused,struct sockaddr_ctl *sac,
     if(bt_sk.connected) {lck_mtx_unlock(&bt_sk_lock);return EBUSY;}
     bt_sk.connected=true;bt_sk.closing=false;bt_sk.unit=sac->sc_unit;*unitinfo=&bt_sk;
     bt_sk_termios_default();
+    /* A client on a stopped controller restarts it. BlueTool shares that request. */
+    if (bt_sk.boot > 0) (void)bt_sk_request_power_locked();
     lck_mtx_unlock(&bt_sk_lock);
     bt_sk_count(2);
     printf("[bluetooth sk] connect unit=%u pid=%d\n",sac->sc_unit,proc_pid(current_proc()));
-    /* A client on a stopped controller restarts it; failures reach the client through I/O status. */
-    if(bt_sk.boot>0 && bt_ops.power)(void)bt_ops.power(bt_ops.context,true);
+    bt_kick();
     return 0;
 }
 static errno_t bt_sk_disconnect(kern_ctl_ref ref __unused,u_int32_t unit,void *unitinfo __unused)
@@ -409,16 +436,12 @@ static int bt_sk_power_on_sysctl SYSCTL_HANDLER_ARGS
 {
 #pragma unused(oidp,arg1,arg2)
     int error=0,result=0;
-    if(req->newptr)return EPERM;
-    if(!req->oldptr)return SYSCTL_OUT(req,&result,sizeof(result));
+    if (req->newptr) return EPERM;
+    if (!req->oldptr) return SYSCTL_OUT(req, &result, sizeof(result));
+    if (!kauth_cred_issuser(kauth_cred_get())) return EPERM;
     bt_sk_count(0);
     lck_mtx_lock(&bt_sk_lock);
-    if(bt_sk.power_pending || !bt_ops.power){lck_mtx_unlock(&bt_sk_lock);return EBUSY;}
-    bt_sk.power_pending=true;bt_sk.power_result=EINPROGRESS;
-    lck_mtx_unlock(&bt_sk_lock);
-    error=bt_ops.power(bt_ops.context,true);
-    lck_mtx_lock(&bt_sk_lock);
-    if(error){bt_sk.power_pending=false;bt_sk.power_result=error;}
+    error = bt_sk_request_power_locked();
     struct timespec timeout={30,0};
     while(bt_sk.power_pending && !error)error=msleep(&bt_sk.power_pending,&bt_sk_lock,PZERO|PCATCH,"btpower",&timeout);
     result=bt_sk.power_result;lck_mtx_unlock(&bt_sk_lock);
@@ -426,42 +449,65 @@ static int bt_sk_power_on_sysctl SYSCTL_HANDLER_ARGS
 }
 SYSCTL_PROC(_kern,OID_AUTO,qbt_power_on,CTLTYPE_INT|CTLFLAG_RD|CTLFLAG_LOCKED,NULL,0,bt_sk_power_on_sysctl,"I","WCN7850 startup request");
 
-int qbt_transport_init(const struct qbt_transport_ops *ops)
+int qbt_transport_init(const struct qbt_transport_ops *ops, uint32_t speed)
 {
-    if(!ops || !ops->wake || !ops->power)return EINVAL;
+    if (!ops || !ops->wake || !ops->power || !speed) return EINVAL;
     lck_mtx_lock(&bt_sk_lock);
     if(bt_ops.wake){lck_mtx_unlock(&bt_sk_lock);return EALREADY;}
-    bt_ops=*ops;lck_mtx_unlock(&bt_sk_lock);return 0;
+    bt_ops = *ops;
+    bt_sk_speed = speed;
+    bt_sk_termios_default();
+    lck_mtx_unlock(&bt_sk_lock);
+
+    struct kern_ctl_reg reg = {
+        .ctl_flags = CTL_FLAG_REG_SOCK_STREAM,
+        .ctl_connect = bt_sk_connect,
+        .ctl_disconnect = bt_sk_disconnect,
+        .ctl_send = bt_sk_send,
+        .ctl_setopt = bt_sk_setopt,
+        .ctl_getopt = bt_sk_getopt,
+    };
+    strlcpy(reg.ctl_name, "com.apple.uart.sk.bluetooth", sizeof(reg.ctl_name));
+    int error = ctl_register(&reg, &bt_sk.ctl);
+    if (error) {
+        lck_mtx_lock(&bt_sk_lock);
+        memset(&bt_ops, 0, sizeof(bt_ops));
+        lck_mtx_unlock(&bt_sk_lock);
+    }
+    return error;
 }
 
 /* Called once by the UART owner: 0 after a complete bring-up (with the
  * UART speed it configured), else errno. */
 void qbt_transport_power_result(bool enabled,int error,const char *firmware,uint32_t speed)
 {
-    if(enabled && !error && !bt_sk.ctl) {
-        bt_sk_speed=speed;
-        struct kern_ctl_reg reg={.ctl_flags=CTL_FLAG_REG_SOCK_STREAM,
-            .ctl_connect=bt_sk_connect,.ctl_disconnect=bt_sk_disconnect,.ctl_send=bt_sk_send,
-            .ctl_setopt=bt_sk_setopt,.ctl_getopt=bt_sk_getopt};
-        strlcpy(reg.ctl_name,"com.apple.uart.sk.bluetooth",sizeof(reg.ctl_name));
-        error=ctl_register(&reg,&bt_sk.ctl);
-        printf("[bluetooth sk] ctl_register com.apple.uart.sk.bluetooth error=%d firmware=%s speed=%u\n",error,firmware,speed);
-    }
     lck_mtx_lock(&bt_sk_lock);
     if(firmware) strlcpy(bt_sk.firmware,firmware,sizeof(bt_sk.firmware));
-    if(enabled && !error){bt_sk_speed=speed;bt_sk_termios_default();}
-    bt_sk.boot=error?error:enabled?0:ENETDOWN;
-    if(!enabled || error)bt_sk.rx_head=bt_sk.rx_len=bt_sk.tx_head=bt_sk.tx_len=0;
-    bt_sk.power_pending=false;bt_sk.power_result=error;
+    if (enabled && !error) {
+        bt_sk_speed = speed;
+        if (!bt_sk.connected) bt_sk_termios_default();
+    }
+    const bool was_unavailable = bt_sk.boot != 0;
+    const bool awaiting_start = !enabled && bt_sk.power_pending;
+    bt_sk.boot = awaiting_start ? -1 : error ? error : enabled ? 0 : ENETDOWN;
+    if (!enabled || error) {
+        bt_sk.rx_head = bt_sk.rx_len = 0;
+        /* Disconnect already cleared the old session. Preserve new startup bytes. */
+        if (!awaiting_start) bt_sk.tx_head = bt_sk.tx_len = 0;
+    }
+    if (enabled) {
+        bt_sk.power_pending = false;
+        bt_sk.power_result = error;
+    }
     kern_channel_ring_t rx=NULL,tx=NULL;
-    if(bt_sk.boot && bt_sk.connected && !bt_sk.closing) {
+    if ((bt_sk.boot || was_unavailable) && bt_sk.connected && !bt_sk.closing) {
         rx=bt_sk.rxring;tx=bt_sk.txring;
         if(rx || tx) ++bt_sk.busy;
     }
     lck_mtx_unlock(&bt_sk_lock);
-    wakeup(&bt_sk.boot);
-    wakeup(&bt_sk.power_pending);
-    /* Wake blocked channel users so their next sync observes the error. The
+    if (!awaiting_start) wakeup(&bt_sk.boot);
+    if (enabled) wakeup(&bt_sk.power_pending);
+    /* Wake blocked channel users so their next sync observes the transition. The
      * busy reference keeps both rings alive until notifications finish. */
     if(rx) (void)kern_channel_notify(rx,0);
     if(tx && tx!=rx) (void)kern_channel_notify(tx,0);

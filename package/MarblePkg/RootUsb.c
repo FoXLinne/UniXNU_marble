@@ -39,10 +39,14 @@ STATIC BOOLEAN mDirty[3];
 STATIC BOOLEAN mDisplayRebind;
 STATIC BOOLEAN mRuntimeUsb;
 STATIC BOOLEAN mUsbStarted, mUsbRecovery, mUsbDraining;
+STATIC BOOLEAN mUsbReattachPending;
+STATIC UINT64 mUsbDetachedAt;
 STATIC UINT64 mUsbRetryAt, mUsbFrequency, mUsbLastCommand;
 STATIC UINT64 mUsbPolls, mUsbBusyTicks, mUsbWaits, mUsbTimeouts;
 STATIC UINT64 mUsbConnects, mUsbDisconnects, mUsbRestarts, mUsbErrors;
 STATIC UINT64 mUsbSession;
+STATIC UINT64 mBootCpuSgiTarget;
+STATIC BOOLEAN mUsbDoorbellOnline;
 STATIC UINT8 *mExport;
 STATIC UINTN mExportBytes;
 STATIC CONST VOID *mFirmwareLog;
@@ -179,6 +183,15 @@ STATIC VOID PublishControl(UINT32 Command)
   mStage->UsbHost.Command=Command;
   ++mStage->UsbHost.Sequence;
   __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->UsbHost) : "memory");
+
+  if (!mServiceReady || mStage->UsbKernel.Ready!=1 || !mUsbDoorbellOnline) return;
+  if (mStage->UsbKernel.Reserved[MARBLE_USB_KERNEL_DOORBELL]==MARBLE_USB_DOORBELL_TAG) {
+    UINT64 Sgi=mBootCpuSgiTarget|((UINT64)MARBLE_USB_DOORBELL_SGI<<24);
+    __asm__ volatile("msr icc_sgi1r_el1, %0\n\tisb" :: "r"(Sgi) : "memory");
+  } else if ((Command>>24)==0x85 && (Command&0xfffU)==1 && ((Command>>12)&2U)) {
+    // Before negotiation was added, SGI 0 was sent for the power button only.
+    __asm__ volatile("msr icc_sgi1r_el1, %0\n\tisb" :: "r"(mBootCpuSgiTarget) : "memory");
+  }
 }
 
 STATIC BOOLEAN ServiceUpdatePoint(VOID)
@@ -335,6 +348,7 @@ STATIC VOID ResetUsbSession(VOID)
 STATIC VOID UsbFailure(VOID)
 {
   ResetUsbSession();
+  mUsbReattachPending=FALSE;
   ++mUsbErrors;
   mUsbRecovery=TRUE;
   mUsbRetryAt=RootCounter()+mUsbFrequency;
@@ -342,14 +356,35 @@ STATIC VOID UsbFailure(VOID)
 
 STATIC VOID UsbState(UINT32 State)
 {
+  BOOLEAN WasConnected=mConnected;
   ResetUsbSession();
   mConnected=State==0;
-  if (mConnected) ++mUsbConnects;
+  if (mConnected) {
+    mUsbReattachPending=FALSE;
+    ++mUsbConnects;
+  }
   else {
     ++mUsbDisconnects;
+    if (WasConnected && mServiceStarted) {
+      mUsbDetachedAt=RootCounter();
+      mUsbReattachPending=TRUE;
+    }
     mUsb->AbortXfer(EP_OUT);
     mUsb->AbortXfer(EP_IN);
   }
+}
+
+STATIC BOOLEAN RetryDetachedUsb(VOID)
+{
+  if (!mUsbReattachPending) return FALSE;
+  UINT64 Now=RootCounter();
+  if (Now-mUsbDetachedAt<2*mUsbFrequency) return FALSE;
+  // Give the controller a chance to report a new connection. If it stays
+  // detached, restart once and then wait for the next connection event.
+  mUsbReattachPending=FALSE;
+  mUsbRecovery=TRUE;
+  mUsbRetryAt=Now;
+  return TRUE;
 }
 
 STATIC EFI_STATUS UsbEvent(USB_DEVICE_EVENT *Event, USB_DEVICE_EVENT_DATA *Data)
@@ -385,6 +420,7 @@ STATIC EFI_STATUS RestartUsb(VOID)
   STATIC VOID *Strings[] = {mLanguage,mManufacturer,mProduct,mSerial,mInterface};
   STATIC ROOT_USB_DESCRIPTOR_SET Set = {mDevice,Configs,mSsDevice,SsConfigs,mQualifier,mBos,5,Strings};
   ResetUsbSession();
+  mUsbReattachPending=FALSE;
   if (mUsbStarted) {
     // Drop both queues before Stop so a host that disappeared cannot retain DMA.
     mUsb->AbortXfer(EP_OUT);
@@ -440,6 +476,7 @@ STATIC INTN WaitTransfer(UINT8 Endpoint, VOID *Buffer, UINTN Expected, BOOLEAN C
     }
     if (Event==UsbDeviceEventNoEvent) {
       if (mUsbDraining) { mUsbDraining=FALSE; return -1; }
+      if (RetryDetachedUsb()) return -1;
       UsbIdle(CommandWait);
     }
   }
@@ -515,6 +552,17 @@ STATIC VOID UsbServiceLoop(VOID)
   while (Divider<15 && (Frequency>>(Divider+1))>1000) ++Divider;
   Control=(Control&~0xf8ULL)|(Divider<<4)|4;
   __asm__ volatile("msr cntkctl_el1, %0\n\tisb" :: "r"(Control) : "memory");
+  UINT64 Sre;
+  __asm__ volatile("mrs %0, icc_sre_el1" : "=r"(Sre));
+  if (!(Sre & 1)) {
+    __asm__ volatile("msr icc_sre_el1, %0\n\tisb" :: "r"(Sre | 1) : "memory");
+    __asm__ volatile("mrs %0, icc_sre_el1" : "=r"(Sre));
+  }
+  mUsbDoorbellOnline=(Sre & 1)!=0;
+  if (mUsbDoorbellOnline) {
+    mStage->UsbHost.Reserved[MARBLE_USB_HOST_DOORBELL]=MARBLE_USB_DOORBELL_TAG;
+    __asm__ volatile("dc cvac, %0\n\tdsb sy" :: "r"((UINTN)&mStage->UsbHost) : "memory");
+  }
   __atomic_store_n(&mServiceReady,1,__ATOMIC_RELEASE);
   __asm__ volatile("sev" ::: "memory");
   for (;;) MarbleRootUsbContinue();
@@ -566,7 +614,12 @@ STATIC EFI_STATUS UsbServiceEnter(VOID)
   __asm__ volatile("dc cvac, %0\n\tdc cvac, %1\n\tdsb sy" ::
       "r"((UINTN)&mStage->UsbHost), "r"((UINTN)&mStage->UsbKernel) : "memory");
     // The payload CPU list excludes the resident USB owner's affinity.
+    // SGI 0 targets the CPU that hands the resident service to XNU.
     UINT64 Value;
+    __asm__ volatile("mrs %0, mpidr_el1" : "=r"(Value));
+    mBootCpuSgiTarget=((Value & 0xff00000000ULL)<<16) | ((Value & 0xff0000)<<16) |
+                     ((Value & 0xff00)<<8) | (((Value & 0xf0)>>4)<<44) |
+                     (1ULL<<(Value & 0xf));
 #define SAVE_USB_REGISTER(Slot, Register) \
     __asm__ volatile("mrs %0, " #Register : "=r"(Value)); mServiceContext[Slot]=Value
     SAVE_USB_REGISTER(0,sctlr_el1);
@@ -1085,6 +1138,8 @@ EFI_STATUS MarbleRootUsbContinue(VOID)
   ZeroMem(&mStage->UsbHost,sizeof(mStage->UsbHost));
   ZeroMem(&mStage->UsbKernel,sizeof(mStage->UsbKernel));
   mStage->UsbHost.Heartbeat=MARBLE_USB_HEARTBEAT_TAG;
+  if (mUsbDoorbellOnline)
+    mStage->UsbHost.Reserved[MARBLE_USB_HOST_DOORBELL]=MARBLE_USB_DOORBELL_TAG;
   __asm__ volatile("dc cvac, %0\n\tdc cvac, %1\n\tdsb sy" ::
       "r"((UINTN)&mStage->UsbHost), "r"((UINTN)&mStage->UsbKernel) : "memory");
         __atomic_store_n(&mKernelRunning,1,__ATOMIC_RELEASE);

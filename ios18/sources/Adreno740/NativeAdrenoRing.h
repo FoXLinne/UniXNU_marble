@@ -63,6 +63,7 @@ class NativeAdrenoRing final {
     /* Timeline stamps: a framed submission reads the CP's always-on counter (19.2 MHz) into the fence page before its user buffers and after
      * them, as a6xx_submit() does for its stats (CP_REG_TO_MEM, REG 0x0980, 64 bit). Slot fence % 64 at +512, 16 bytes: start, end. */
     bool stamps_=false;
+    bool flush_before_fence_=false;
     /* CP preemption between rings (NativeAdrenoPreempt): every framed submission ends by yielding the floor, and the prologue
      * names the ring's preemption record with CP_SET_PSEUDO_REG so the CP can save this ring's state into it. A ring that is not
      * the one the CP runs appends its words without moving CP_RB_WPTR: the switch writes it after the CP arrives (msm's
@@ -153,6 +154,7 @@ public:
     void requestContextReset() {reset_pending_=true;}
     /* Turns the timeline stamps on or off for the framed submissions after this call; off by default. */
     void setTimeline(bool on) {stamps_=on;}
+    void setFlushBeforeFence(bool on) { flush_before_fence_ = on; }
     /* The always-on counter ticks the CP read before and after the user buffers of a fence's submission (a status word: 1 attached, 2 stamps on, 4 page big enough, 8 page acquired, 16 slot read). Invalidates the fence page first. */
     uint32_t timeline(uint32_t fence,uint64_t *start,uint64_t *end);
     /* The client whose submission comes next. A change of client is a context switch: as a6xx_set_pagetable() does whenever the

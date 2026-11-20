@@ -18,6 +18,7 @@
 extern "C" {
 IOReturn native_marble_kernel_panel_control(uint32_t,uint32_t,volatile MARBLE_SCANOUT *);
 volatile uint64_t marble_scanout_state[17];
+volatile uint64_t marble_scanout_idle_stats[4];
 volatile uint64_t marble_panel_dcs_state[8];
 volatile uint32_t marble_panel_mode_state[12];
 volatile uint64_t marble_scanout_latch_ticks[2048];
@@ -26,6 +27,7 @@ uint32_t marble_scanout_registers[8][8];
 volatile uint32_t native_ufs_dpu_smmu[24];
 volatile uint32_t native_ufs_dpu_state;
 volatile uint32_t native_ufs_dpu_check[8];
+volatile uint32_t marble_scanout_scaler[5];
 }
 namespace {
 // Sheng display translation, with marble stream IDs from marble_live.dts.
@@ -162,11 +164,35 @@ static void startDpu() {
 IOMemoryMap *mailboxMap;
 IOMemoryMap *scanoutMdpMap;
 volatile uint32_t *scanoutMdp;
+IOMemoryMap *scanoutDsiMap;
+volatile uint32_t *scanoutDsi;
+constexpr uint32_t kTimingEngine = 0x36000 / 4, kActiveInterface = 0x160f4 / 4;
+constexpr uint32_t kDsiControl = 4 / 4, kDsiVideoEngine = 1u << 1;
+uint32_t savedTiming;
+bool hasDeferredFlip;
+uint32_t deferredSlot;
 volatile MARBLE_SCANOUT *mailbox;
 MarbleScanoutLayout layout;
 MarbleScanoutOwnership ownership;
 bool ready, failed;
 IOLock *scanoutLock;
+
+// Marble's DT binds the single firmware VIG0 pipe to a QSEED 0x3001 scaler.
+constexpr uint32_t kVig0 = 0x5000;
+constexpr uint32_t kQseed = kVig0 + 0xa00;
+constexpr uint32_t kScalerRegisters[] = {
+    kVig0 + 0x00, kVig0 + 0x0c,
+    kVig0 + 0x100, kVig0 + 0x104, kVig0 + 0x108,
+    kVig0 + 0x110, kVig0 + 0x114, kVig0 + 0x118,
+    kVig0 + 0x120, kVig0 + 0x124, kVig0 + 0x128,
+    kQseed + 0x10, kQseed + 0x14, kQseed + 0x18, kQseed + 0x1c,
+    kQseed + 0x20, kQseed + 0x40, kQseed + 0x44, kQseed + 0x48,
+    kQseed + 0x90, kQseed + 0x94, kQseed + 0x98, kQseed + 0x9c,
+    kQseed + 0x04,
+};
+uint32_t firmwareScalerRegisters[sizeof(kScalerRegisters) / sizeof(kScalerRegisters[0])];
+bool scaling;
+
 void refresh() {
     __asm__ volatile("dc ivac,%0\n\tdsb sy"::"r"(mailbox):"memory");
     marble_scanout_state[1]=mailbox->error;
@@ -218,7 +244,7 @@ bool configure() {
         if ((mailbox->pipe_mask&(1U<<i)) && !marbleScanoutPipeValid(i,marble_scanout_registers[i],video.v_width,video.v_height,video.v_rowBytes)) {marble_scanout_state[1]=6;return false;}
     }
     scanoutLock=IOLockAlloc();if (!scanoutLock) {marble_scanout_state[1]=7;return false;}
-    auto *mdpMemory=IODeviceMemory::withRange(0xae00000,0x30000);
+    auto *mdpMemory=IODeviceMemory::withRange(0xae00000,0x38000);
     scanoutMdpMap=mdpMemory ? mdpMemory->map(kIOMapAnywhere|kIOMapInhibitCache) : nullptr;
     OSSafeReleaseNULL(mdpMemory);
     if (!scanoutMdpMap) {marble_scanout_state[1]=8;return false;}
@@ -227,6 +253,10 @@ bool configure() {
     marble_scanout_state[10]=mailbox->version;marble_scanout_state[11]=video.v_baseAddr;
     marble_scanout_state[12]=video.v_rowBytes;marble_scanout_state[13]=layout.slotBytes;
     marble_scanout_state[16]=mailbox->flush_mask;
+    auto *dsiMemory = IODeviceMemory::withRange(0xae94000, 0x1000);
+    scanoutDsiMap = dsiMemory ? dsiMemory->map(kIOMapAnywhere | kIOMapInhibitCache) : nullptr;
+    OSSafeReleaseNULL(dsiMemory);
+    if (scanoutDsiMap) scanoutDsi = reinterpret_cast<volatile uint32_t *>(scanoutDsiMap->getVirtualAddress());
     ready=true;failed=false;marble_scanout_state[0]=2;
     IOLog("MarbleScanout: kernel MMIO buffers=%u pipes=%x span=%llu\n",MarbleScanoutSlots,mailbox->pipe_mask,layout.slotBytes);
     return true;
@@ -244,6 +274,14 @@ IOReturn scanoutFlip(uint32_t slot) {
         if (source<mailbox->base || source-mailbox->base>=layout.slotBytes ||
             address+source-mailbox->base>UINT32_MAX) return kIOReturnBadArgument;
     }
+    if (savedTiming) {
+        // The panel is asleep. Keep the latest buffer pinned for the first
+        // scan on resume, without waiting for a disabled frame boundary.
+        deferredSlot = slot;
+        hasDeferredFlip = true;
+        ++marble_scanout_idle_stats[2];
+        return kIOReturnSuccess;
+    }
     for (unsigned i=0;i<8;++i) if (mask&(1U<<i))
         scanoutMdp[(pipes[i]+0x14)/4]=uint32_t(address+marble_scanout_registers[i][2]-mailbox->base);
     __asm__ volatile("dsb sy" ::: "memory");
@@ -257,6 +295,39 @@ IOReturn scanoutFlip(uint32_t slot) {
     }
     return kIOReturnSuccess;
 }
+// Called with scanoutLock held, after the DCS sleep-in completes.
+void parkScanout() {
+    if (!scanoutDsi || savedTiming || (scanoutMdp[kActiveInterface] & 6u) != 2u ||
+        (scanoutDsi[kDsiControl] & 3u) != 3u ||
+        (scanoutMdp[0x16018 / 4] & mailbox->flush_mask)) return;
+    const uint32_t timing = scanoutMdp[kTimingEngine];
+    if (!timing) return;
+    scanoutMdp[kTimingEngine] = 0;
+    __asm__ volatile("dsb sy" ::: "memory");
+    // The existing panel modes run at 60/90/120 Hz. Drain the current frame
+    // before turning off the DSI video engine. Command mode stays available.
+    IOSleep(20);
+    scanoutDsi[kDsiControl] = scanoutDsi[kDsiControl] & ~kDsiVideoEngine;
+    __asm__ volatile("dsb sy" ::: "memory");
+    savedTiming = timing;
+    ++marble_scanout_idle_stats[0];
+}
+
+void resumeScanout() {
+    if (!savedTiming) return;
+    scanoutDsi[kDsiControl] = scanoutDsi[kDsiControl] | kDsiVideoEngine;
+    __asm__ volatile("dsb sy" ::: "memory");
+    scanoutMdp[kTimingEngine] = savedTiming;
+    __asm__ volatile("dsb sy" ::: "memory");
+    savedTiming = 0;
+    ++marble_scanout_idle_stats[1];
+    if (hasDeferredFlip) {
+        const IOReturn status = scanoutFlip(deferredSlot);
+        if (status) ++marble_scanout_idle_stats[3];
+        hasDeferredFlip = false;
+    }
+}
+
 IOReturn flip(uint32_t slot, uint64_t timeoutNs=100000000) {
     refresh();
     if (mailbox->requested!=mailbox->completed) return kIOReturnBusy;
@@ -292,8 +363,11 @@ static IOReturn panelControl(uint32_t operation,uint32_t value) {
         IOLockUnlock(scanoutLock);
         return result;
     }
+    const bool panelPower = operation == MARBLE_PANEL_POWER;
+    if (panelPower && value) resumeScanout();
     mailbox->reserved[0]=value;
     const IOReturn result=flip(operation,operation==MARBLE_PANEL_REFRESH?1000000000:500000000);
+    if (!result && panelPower && !value) parkScanout();
     IOLockUnlock(scanoutLock);
     return result;
 }
@@ -321,9 +395,11 @@ extern "C" IOReturn native_gop_scanout_present(uint32_t slot) {
     marble_scanout_state[8]=ownership.pending;const IOReturn status=scanoutFlip(slot);
     if (!status) {
         ownership.latched(slot);marble_scanout_state[7]=ownership.shown;marble_scanout_state[8]=ownership.pending;
-        const uint32_t count = marble_scanout_latch_count;
-        marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
-        __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
+        if (!savedTiming) {
+            const uint32_t count = marble_scanout_latch_count;
+            marble_scanout_latch_ticks[count % 2048] = mach_absolute_time();
+            __atomic_store_n(&marble_scanout_latch_count, count + 1, __ATOMIC_RELEASE);
+        }
     }
     else failed=true;
     IOLockUnlock(scanoutLock);return status;
@@ -386,5 +462,65 @@ extern "C" bool native_gop_direct_config(uint32_t *pipes,uint32_t *offsets,
     }
     *mask=mailbox->pipe_mask;*flush=mailbox->flush_mask;
     *base=uint32_t(mailbox->base);*stride=mailbox->stride;
+    return true;
+}
+
+// Called on the display workloop before the existing address/stride flush.
+// Keep the boot plane's output rectangle and format, and scale its RGB input.
+extern "C" bool native_gop_direct_scale_supported(uint32_t width, uint32_t height);
+extern "C" bool native_gop_direct_scale(uint32_t width, uint32_t height);
+
+bool native_gop_direct_scale_supported(uint32_t width, uint32_t height)
+{
+    // The two iOS 18 display zoom modes in profiles/marble-display.toml.
+    const bool displayMode = (width == 1125 && height == 2436) || (width == 960 && height == 2079);
+    return displayMode && ready && mailbox->pipe_mask == 1 &&
+           mailbox->width == 1080 && mailbox->height == 2400 &&
+           marble_scanout_registers[0][1] == 0 &&
+           marble_scanout_registers[0][2] == mailbox->base;
+}
+
+extern "C" bool native_gop_direct_scale(uint32_t width, uint32_t height)
+{
+    if (!width && !height) {
+        if (scaling) {
+            for (unsigned i = 0; i < sizeof(kScalerRegisters) / sizeof(kScalerRegisters[0]); ++i)
+                scanoutMdp[kScalerRegisters[i] / 4] = firmwareScalerRegisters[i];
+            scaling = false;
+            ++marble_scanout_scaler[4];
+        }
+        return true;
+    }
+    if (!native_gop_direct_scale_supported(width, height)) return false;
+    const uint32_t source = width | height << 16;
+    if (scaling && source == marble_scanout_scaler[1]) return true;
+
+    const uint32_t version = scanoutMdp[kQseed / 4];
+    marble_scanout_scaler[0] = version;
+    if ((version != 0x3001 && version != 0x30010000) ||
+        (scanoutMdp[(kVig0 + 0x170) / 4] & 3U))
+        return false;
+
+    const uint32_t destination = mailbox->width | mailbox->height << 16;
+    const uint32_t stepX = uint32_t((uint64_t(width) << 21) / mailbox->width);
+    const uint32_t stepY = uint32_t((uint64_t(height) << 21) / mailbox->height);
+    constexpr uint32_t kPreload = 0x02040204;
+    constexpr uint32_t kBilinearRgb = (1U << 31) | (3U << 16) | (1U << 14) | 1U;
+    const uint32_t values[] = {
+        source, destination,
+        0, 0, source, 0, 0, source, 0, 0, source,
+        stepX, stepY, stepX, stepY, kPreload, source, source, destination,
+        0, 0, 0, 0, kBilinearRgb,
+    };
+    static_assert(sizeof(values) == sizeof(firmwareScalerRegisters), "QSEED register count");
+    for (unsigned i = 0; i < sizeof(values) / sizeof(values[0]); ++i) {
+        volatile uint32_t &reg = scanoutMdp[kScalerRegisters[i] / 4];
+        if (!scaling) firmwareScalerRegisters[i] = reg;
+        reg = values[i];
+    }
+    scaling = true;
+    marble_scanout_scaler[1] = source;
+    marble_scanout_scaler[2] = destination;
+    ++marble_scanout_scaler[3];
     return true;
 }

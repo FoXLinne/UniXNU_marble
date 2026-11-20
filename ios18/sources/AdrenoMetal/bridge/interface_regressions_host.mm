@@ -16,6 +16,20 @@
 - (void)newComputePipelineStateWithDescriptor:(MTLComputePipelineDescriptor *)d completionHandler:(void (^)(id<MTLComputePipelineState>,NSError *))handler;
 - (id<MTLTexture>)newTextureWithBytesNoCopy:(void *)bytes length:(NSUInteger)length descriptor:(MTLTextureDescriptor *)d deallocator:(void (^)(void *,NSUInteger))deallocator;
 @end
+@interface MTLCompileOptions (CallableCheck)
+- (void)setAdditionalCompilerArguments:(NSString *)arguments;
+@end
+@protocol CallableCheck
+- (id<CallableCheck>)returnType;
+- (const void *)bitCodeHash;
+- (NSArray<id<CallableCheck>> *)arguments;
+- (NSString *)name;
+- (NSUInteger)type;
+- (MTLDataType)dataType;
+- (NSString *)typeName;
+- (NSArray<id<CallableCheck>> *)members;
+- (id<CallableCheck>)dataTypeDescription;
+@end
 static unsigned missing;
 static void absent(const char *c,const char *s) {fprintf(stderr,"missing %s %s\n",c,s);++missing;}
 #define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %d: %s\n",__LINE__,#x);return 1;}}while(0)
@@ -43,6 +57,55 @@ int main(int argc,char **argv) {@autoreleasepool {
  if(defaults)unsetenv("NATIVE_METAL_SINGLE_SAMPLE");
  else setenv("NATIVE_METAL_SINGLE_SAMPLE",single?"1":"0",1);
  id<MTLDevice> dev=native_bridge_metal_open(argv[1],argv[2],0,absent);CHECK(dev);
+ if(!strcmp(argv[3],"callable")) {
+  auto options=[MTLCompileOptions new];
+  [options setAdditionalCompilerArguments:@"-w -DWALLPAPER_GAIN=2"];
+  NSError *error=nil;
+  NSString *source=@"#include <metal_stdlib>\nusing namespace metal;\n"
+   "#ifndef WALLPAPER_GAIN\n#error missing additional compiler argument\n#endif\n"
+   "[[stitchable]] float4 tint(float4 color, float amount) { return color * (amount * WALLPAPER_GAIN); }\n"
+   "namespace coreimage { struct Destination { float2 c; }; }\n"
+   "[[stitchable]] float4 positionTint(float4 color, coreimage::Destination dst) { return color * dst.c.x; }";
+  auto library=[dev newLibraryWithSource:source options:options error:&error];
+  if(error)fprintf(stderr,"callable Metal library: %s\n",error.description.UTF8String);
+  CHECK(library && !error);
+  id<CallableCheck> function=(id)[library newFunctionWithName:@"tint"];
+  CHECK(function.returnType.dataType==MTLDataTypeFloat4);
+  auto arguments=function.arguments;
+  CHECK(arguments.count==2);
+  CHECK(arguments[0].type==18 && arguments[1].type==18);
+  CHECK([arguments[0].name isEqualToString:@"color"] && arguments[0].dataTypeDescription.dataType==MTLDataTypeFloat4);
+  CHECK([arguments[1].name isEqualToString:@"amount"] && arguments[1].dataTypeDescription.dataType==MTLDataTypeFloat);
+  id<CallableCheck> positioned=(id)[library newFunctionWithName:@"positionTint"];
+  CHECK(positioned.arguments.count==2);
+  id<CallableCheck> destination=positioned.arguments[1];
+  CHECK([destination.name isEqualToString:@"dst"] && destination.type==29);
+  CHECK(destination.dataTypeDescription.dataType==MTLDataTypeStruct);
+  CHECK([destination.dataTypeDescription.typeName isEqualToString:@"coreimage::Destination"]);
+  CHECK(destination.dataTypeDescription.members.count==1);
+  CHECK(destination.dataTypeDescription.members[0].dataType==MTLDataTypeFloat2);
+  id<CallableCheck> secondLookup=(id)[library newFunctionWithName:@"tint"];
+  CHECK(memcmp(function.bitCodeHash,secondLookup.bitCodeHash,32)==0);
+  auto aliasDescriptor=[MTLFunctionDescriptor new];
+  aliasDescriptor.name=@"tint";
+  aliasDescriptor.specializedName=@"aliasedTint";
+  auto alias=[library newFunctionWithDescriptor:aliasDescriptor error:&error];
+  CHECK(alias && !error);
+  CHECK(memcmp(function.bitCodeHash,[(id<CallableCheck>)alias bitCodeHash],32)!=0);
+  auto color=[[MTLFunctionStitchingInputNode alloc] initWithArgumentIndex:0];
+  auto amount=[[MTLFunctionStitchingInputNode alloc] initWithArgumentIndex:1];
+  auto first=[[MTLFunctionStitchingFunctionNode alloc] initWithName:@"tint" arguments:@[color,amount] controlDependencies:@[]];
+  auto second=[[MTLFunctionStitchingFunctionNode alloc] initWithName:@"aliasedTint" arguments:@[first,amount] controlDependencies:@[]];
+  auto graph=[[MTLFunctionStitchingGraph alloc] initWithFunctionName:@"doubleTint" nodes:@[first,second] outputNode:second attributes:@[]];
+  auto descriptor=[MTLStitchedLibraryDescriptor new];
+  descriptor.functionGraphs=@[graph];
+  descriptor.functions=@[[library newFunctionWithName:@"tint"],alias];
+  auto stitched=[dev newLibraryWithStitchedDescriptor:descriptor error:&error];
+  if(error)fprintf(stderr,"stitched Metal library: %s\n",error.description.UTF8String);
+  CHECK(stitched && !error && [stitched newFunctionWithName:@"doubleTint"]);
+  puts("PASS: callable Metal signature, Core Image destination, stitched alias and stable function digest");
+  return 0;
+ }
  id<MTLCommandQueue> queue=[dev newCommandQueue];CHECK(queue);
  // Automatic heaps reclaim their ranges while aliasable objects remain alive.
  auto hd=[MTLHeapDescriptor new];hd.size=65536;hd.storageMode=MTLStorageModePrivate;

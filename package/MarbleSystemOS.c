@@ -145,6 +145,16 @@ void native_marble_ui_exit(proc_t process, const char *name, uint32_t reason_nam
     }
     uint64_t pc;
     memcpy(&pc, record->state + 264, sizeof(pc));
+    if (!strcmp(name, "bluetoothd") && current_proc() == process && dyld_info.all_image_info_size >= 16) {
+        uint64_t image_array = 0, main_image = 0;
+        if (!copyin(dyld_info.all_image_info_addr + 8, &image_array, sizeof(image_array)) && image_array &&
+            !copyin(image_array, &main_image, sizeof(main_image)) && main_image) {
+            uint32_t magic = 0;
+            if (!copyin(main_image, &magic, sizeof(magic)) && magic == 0xfeedfacf &&
+                pc >= main_image && pc - main_image < 0x1000000)
+                printf("[bluetooth] daemon exit signal=%llu image_offset=%llx\n", reason_code, pc - main_image);
+        }
+    }
     printf("MarbleUI: %s[%u] exit namespace=%u code=%llx pc=%llx\n", record->name,
            record->pid, record->reason_namespace, record->reason_code, pc);
 }

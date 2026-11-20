@@ -124,7 +124,9 @@ static void event(unsigned operation, int result, const struct nw_control_view *
     nw_wifi_stats.scans++; if (nw_events.scan_done) nw_events.scan_done(); return;
   }
   lx_shared_spin_lock(&boundary_lock);
-  if (radio.pending || ui.operation == NW_CONTROL_JOIN_REQUEST || ui.operation == NW_CONTROL_DISCONNECT_REQUEST) {
+  const bool detach_complete = operation == NW_CONTROL_DISCONNECTED && disconnect_waiting;
+  if (radio.pending || ui.operation == NW_CONTROL_JOIN_REQUEST ||
+      (ui.operation == NW_CONTROL_DISCONNECT_REQUEST && !detach_complete)) {
     lx_shared_spin_unlock(&boundary_lock); return;
   }
   switch (operation) {
@@ -175,8 +177,12 @@ static void event(unsigned operation, int result, const struct nw_control_view *
     }
     break;
   case NW_CONTROL_DISCONNECTED: {
+    // The radio can report teardown before the queued request is retired.
+    // The completion also satisfies any disconnect queued for this link.
+    if (detach_complete && ui.operation == NW_CONTROL_DISCONNECT_REQUEST)
+      memzero_explicit(&ui, sizeof(ui));
     disconnect_waiting = false;
-    bool notify = status.state == NW_STA_UP;
+    bool notify = status.state == NW_STA_UP && !detach_complete;
     bool failed_join = join_waiting; join_waiting = false;
     clear_connection(status.state == NW_STA_OFF ? NW_STA_OFF : NW_STA_IDLE); epoch++;
     lx_shared_spin_unlock(&boundary_lock);
@@ -260,7 +266,16 @@ int nw_wifi_connect(const u8 *ssid, size_t length, const u8 *address, const char
   lx_shared_spin_unlock(&boundary_lock); return 0;
 }
 void nw_wifi_disconnect(void) {
-  lx_shared_spin_lock(&boundary_lock); disconnect_waiting = true; memzero_explicit(&ui, sizeof(ui)); ui.operation = NW_CONTROL_DISCONNECT_REQUEST;
+  lx_shared_spin_lock(&boundary_lock);
+  // A rejoin can request the same teardown while the supplicant is already
+  // disconnecting. Reissuing it would advance the control generation.
+  if (disconnect_waiting) {
+    lx_shared_spin_unlock(&boundary_lock);
+    return;
+  }
+  disconnect_waiting = true;
+  memzero_explicit(&ui, sizeof(ui));
+  ui.operation = NW_CONTROL_DISCONNECT_REQUEST;
   join_waiting = false;
   if (scan_waiting) { scan_waiting = false; scan_ack_pending = true; }
   if (!radio.enabled) clear_connection(NW_STA_OFF);

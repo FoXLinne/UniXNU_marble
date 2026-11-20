@@ -16,6 +16,7 @@ extern "C" void native_marble_watchdog_start(void) __attribute__((weak_import));
 extern "C" void native_marble_cpu_idle(unsigned, bool) __attribute__((weak_import));
 extern "C" int native_marble_cpu_sleep_ready(void) __attribute__((weak_import));
 extern "C" int native_marble_cpu_resume_request(unsigned) __attribute__((weak_import));
+extern "C" void native_resident_usb_doorbell(void) __attribute__((weak_import));
 extern "C" void ml_arm_sleep(void) __attribute__((noreturn));
 
 static void marbleIdleNotify(cpu_id_t, boolean_t entering, uint64_t *)
@@ -624,30 +625,30 @@ void ArmCpu::startSecondary (void)
 void ArmCpu::initCPU (bool boot)
 {
   if (secondary) {
-    if (!boot) { panic ("ArmCpu: secondary resume is unsupported"); }
+    if (!boot && !(native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready())) { panic ("ArmCpu: secondary resume is unsupported"); }
     armcpu_smp_step[logicalId] = 5;
     uint64_t mpidr;
     __asm__ volatile ("mrs %0, mpidr_el1" : "=r" (mpidr));
     armcpu_smp_seen_mpidr[logicalId] = static_cast<uint32_t> (mpidr);
     // A failure is recorded and the core parked (rather than a panic that hides the other cores' state).
     if ((mpidr & 0xffff) != (affinity & 0xffff)) { armcpu_smp_fail[logicalId] = 1; parkCore (); }
-    if (!gRemoteGic && !wakeRedistributor (true)) { armcpu_smp_fail[logicalId] = 2; parkCore (); }
+    if (boot && !gRemoteGic && !wakeRedistributor (true)) { armcpu_smp_fail[logicalId] = 2; parkCore (); }
     armcpu_smp_step[logicalId] = 6;
     enableGic ();
     if (gSpiIpi) { spiIpiConfigure (gDist, logicalId, affinity); }
     // The shared IOCPUInterruptController blocks registrations until every core is enabled, so the secondary cores
     // install their handler directly. ml_install_interrupt_handler() records it in the calling core's cpu_data.
-    ml_install_interrupt_handler (this, static_cast<int> (logicalId), this, reinterpret_cast<IOInterruptHandler> (&ArmCpu::dispatch), nullptr);
+    if (boot) { ml_install_interrupt_handler (this, static_cast<int> (logicalId), this, reinterpret_cast<IOInterruptHandler> (&ArmCpu::dispatch), nullptr); }
     enableCPUTimeBase (true);
     setCPUState (kIOCPUStateRunning);
     armcpu_smp_step[logicalId] = 7;
-    armcpu_smp_running = armcpu_smp_running + 1;
+    if (boot) { armcpu_smp_running = armcpu_smp_running + 1; }
     // XNU clears SIGPdisabled for a core the first time that core takes an IPI, and cpu_signal() silently skips a core until then; Apple's
     // CPU driver provokes it with a self-IPI from initCPU (osfmk/kern/machine.c, processor_up).
     if (gSelfIpi) { signalCPU (this); }
     return;
   }
-  if (!boot) { panic ("ArmCpu: secondary/resume CPU startup is unsupported"); }
+  if (!boot && !(native_marble_cpu_sleep_ready && native_marble_cpu_sleep_ready())) { panic ("ArmCpu: secondary/resume CPU startup is unsupported"); }
   if (skipGic) {
     // Explicit A/B hardware diagnostic: do not touch GIC MMIO or enable an
     // interrupt source. CPU registration still happens; the timer is left off.
@@ -698,6 +699,9 @@ void ArmCpu::interrupt (void)
       armcpu_irq_phase=4;
       if (ipi_handler != nullptr) { ipi_handler (); }
       armcpu_irq_phase=5;
+    } else if ((id & 0xffffff) == 1 && logicalId == 0 && native_resident_usb_doorbell) {
+      // Negotiated with the separate RootStage firmware CPU.
+      native_resident_usb_doorbell();
     } else if (gSpiIpi && (id & 0xffffff) >= kIpiSpiBase && (id & 0xffffff) < kIpiSpiBase + 8) {
       armcpu_ipi_interrupts = armcpu_ipi_interrupts + 1;
       armcpu_core_sgi[logicalId & 7] = armcpu_core_sgi[logicalId & 7] + 1;

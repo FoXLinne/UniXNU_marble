@@ -1,13 +1,13 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-11-18T09:45:50+0800",
+  "updated_at": "2026-11-20T04:33:24.759574+08:00",
   "device": "marble",
   "work_focus": "iOS 18.7.11 / 22H384",
   "execution_state": {
     "os": "iOS 18.7.11",
     "slot": "a",
     "usb_adb": "inactive",
-    "fastboot": "由固件复位进入",
+    "fastboot": "可由驻留固件复位进入",
     "unixnu_bytes": 274879983616,
     "installed_system": "22H384 OS、SystemOS、KernelSeed 及 UFS 清单已读回核对",
     "storage_plan": "cache/ios18-port/ufs-256/storage_plan.json",
@@ -16,13 +16,16 @@
       "source_build": "22H384",
       "seed_sha256": "65250da33018afd092796a0928f109083aaa6cf27775505c0c6a121e0880bdbe",
       "status": "Data 窗口清零并从 22H384 种子重建"
-    }
+    },
+    "boot_candidate": "R33 integrated_fence_flush 临时实验镜像",
+    "usb_mode": "RootStage2 (kernel)",
+    "usb_pairing": "Apple USB 配对记录保留"
   },
   "latest_source": {
     "snapshot": "source_snapshot.json",
     "origins": "source_origins.json",
     "upstream_revisions": "upstream_revisions.json",
-    "qualification": "本地源码含实验性改动；完整集成构建与功能验收待完成",
+    "qualification": "R23 采用 metal2vulkan 963f0e64 的 11 月 10 日快照和原缓冲区同步实现，接入两项 Core Image 修复。",
     "snapshot_sha256": "db6b61ed03136a33d6e39bf252b46bdae5fd7615d445969229c60b7ada82c898"
   },
   "upstream_sync": {
@@ -131,26 +134,31 @@
   },
   "最新构建": {
     "target": "22H384",
-    "status": "R11 临时启动至桌面",
-    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r3/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
-    "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
+    "status": "R18 临时启动进入 SpringBoard，面板自动切换至 120 Hz",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
     "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
-    "device_result": "Safari 打开 apple.com 并渲染离线错误页。此次 WebKit GPU 日志无 hw.pagesize 拒绝。RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。",
-    "source_commit": "7263d9fb",
-    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r11/temporary-boot.json",
-    "image": "outputs/UniXNU_marble/ios18-port/usb-r11/marble_temporary_boot.img",
-    "image_sha256": "2040f66dbb52a987d0e5705cfbfaeca1da9959297a2d6e1c3a13da14517a3947",
-    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.macho",
-    "kernel_sha256": "2d95d1d3de44605c2888ef8760293ea4716fc4278fcc7b1f504ca38063bd03a8",
+    "device_result": "标准档 375×812 点，DSI 实测 119.45 Hz。5.18 秒内完成 203 帧直扫，GPU 拷贝计数增量为 0。Safari/WebKit GPU 存在高频系统调用拒绝，应用内性能待进一步定位。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r18/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r18/marble_temporary_boot.img",
+    "image_sha256": "8c9e221c1bdd90bd31d08b82552faf96c6a9cd418140ff5287476e649ff2f099",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r18/kernel.macho",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
     "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
-    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 appsync=1 marble-skip-setup=1 -v early_console=1 sheng-aks-sls=0 sheng-dpu-scanout=3 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 marble-ui-identity=1602 marble-display-scale=3",
     "usb_owner": "firmware",
     "firmware_usb_affinity": 256,
     "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
     "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
     "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
-    "safari_screenshot": "outputs/UniXNU_marble/ios18-port/usb-r11/Safari-offline.png",
-    "log": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.log"
+    "owner_trust_cache_sha256": "42d8a7435807800bb4bb6abc3cb0b71e86068d837f615f9b0cb3501e380dcecb",
+    "display_source_sha256": "85f8c8f95d3b58e277c4a3a99d8af75d3aa1003fe2461933c5169768747c7aa3",
+    "framebuffer_source_sha256": "afaac77e890e361c9a27de7be55a04527437b15ff6d758417943029c1142277d",
+    "setup_policy_source_sha256": "a90baa0e02af6a7d21fbb535c1182487b0ac9f0654b6e10580d4a28ba6169fd0",
+    "packer_source_sha256": "9bb400280d87168672b251eff2a94b025876169a1539dcc2ae7d55d03addb412",
+    "panel_startup_source_sha256": "856773d429b21b31cffd89c5aba9d38d4273ef8e60ed3325b104a7d0ace6ffa6",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r18/boot-runtime/kernel.log"
   },
   "更新要求": [
     "每次源码、内核、插件、启动参数或启动镜像变化，立即更新本文件。",
@@ -160,9 +168,16 @@
   "真机运行记录": {
     "system": "iOS 18.7.11",
     "build": "22H384",
-    "candidate": "R11",
-    "status": "Safari 打开 apple.com 并渲染离线错误页。此次 WebKit GPU 日志无 hw.pagesize 拒绝。RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。",
-    "usb_phase": "kernel"
+    "candidate": "R27",
+    "status": "R27 真机启动。记录到 PhotosPosterProvider 启动，墙纸添加结果待记录。",
+    "usb_phase": "kernel",
+    "startup": "outputs/UniXNU_marble/ios18-port/usb-r27/launch.jsonl",
+    "wallpaper_crash": "outputs/UniXNU_marble/ios18-port/usb-r24/wallpaper-runtime/sample-001/state.json",
+    "display_counters": "outputs/UniXNU_marble/ios18-port/usb-r18/point-to-point/standard.json",
+    "panel_timing": "outputs/UniXNU_marble/ios18-port/usb-r18/panel-timing.json",
+    "zoom_transition_r16": "outputs/UniXNU_marble/ios18-port/usb-r16/point-to-point/live-after-report.json",
+    "webkit_log_counts": "outputs/UniXNU_marble/ios18-port/usb-r18/boot-runtime/events.json",
+    "wallpaper_trace": "outputs/UniXNU_marble/ios18-port/usb-r27/add-runtime.json"
   },
   "maintenance": {
     "status": "整理完成；源码与文档随本次提交保存",
@@ -175,7 +190,8 @@
   "上游同步": {
     "repositories": 85,
     "report": "build/upstream/latest.json",
-    "status": "上游分支引用已更新，按组件选择实现"
+    "sources": [],
+    "status": "上游拉取完成，源码整合进行中"
   },
   "最近失败候选": {
     "target": "22H384",
@@ -198,5 +214,1390 @@
     "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
     "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
     "log": "outputs/UniXNU_marble/ios18-port/usb-r10/kernel.log"
+  },
+  "R11 真机记录": {
+    "target": "22H384",
+    "status": "R11 临时启动至桌面",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r3/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "06e1583cc56f29e7079be734a0152456767aa14401469fc3f4c8c16f9258621e",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "Safari 打开 apple.com 并渲染离线错误页。此次 WebKit GPU 日志无 hw.pagesize 拒绝。RootStage USB 可读内核日志，蓝牙控制器以 3 Mbaud 启动。",
+    "source_commit": "7263d9fb",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r11/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r11/marble_temporary_boot.img",
+    "image_sha256": "2040f66dbb52a987d0e5705cfbfaeca1da9959297a2d6e1c3a13da14517a3947",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.macho",
+    "kernel_sha256": "2d95d1d3de44605c2888ef8760293ea4716fc4278fcc7b1f504ca38063bd03a8",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "safari_screenshot": "outputs/UniXNU_marble/ios18-port/usb-r11/Safari-offline.png",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r11/kernel.log"
+  },
+  "R12 真机记录": {
+    "target": "22H384",
+    "status": "R12 临时启动至桌面",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "临时启动至桌面，RootStage USB 可读内核日志。Spotlight 字母和表情键盘右缘裁切，点按 123 后仍停留在字母页。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r12/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r12/marble_temporary_boot.img",
+    "image_sha256": "6cdf802d2943b0a5398753cdc36b4af554a126f8102cd8f856adf4f7f9f8f3d5",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r12/kernel.macho",
+    "kernel_sha256": "4a582b2e95d1bb9d76b03d97a944b3ff3a891ed848126f81fce851a9c557cb7b",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 sheng-aks-sls=0 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 appsync=1 marble-skip-setup=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r12/input-layout-20261118/kernel.log"
+  },
+  "R14 真机记录": {
+    "target": "22H384",
+    "status": "R14 临时启动至桌面，布局回归",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "1080×2400 合成帧直扫，UIKit 为 360×800 点，布局问题重现。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r14/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r14/marble_temporary_boot.img",
+    "image_sha256": "fbaa275a97d1a53b0d3bf2439252947313b6c313eefeeaacf304730442837ea6",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r14/kernel.macho",
+    "kernel_sha256": "4a582b2e95d1bb9d76b03d97a944b3ff3a891ed848126f81fce851a9c557cb7b",
+    "gpu_addon_sha256": "57b6017c9f06980dfde9cd815361868bb7ad9543e1491f90ba7c8ef2b65c7ba5",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 appsync=1 marble-skip-setup=1 sheng-aks-sls=0 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "owner_trust_cache_sha256": "15cdbf3904737fc7c610c5b6c5b48d3605a6fe0fb2b3413ed3dc04bc718e3802",
+    "phone_ui_source_sha256": "25db11ccf86036abb7557a3fa8517b35cbbe8f5924ff53d9774b9e44dac0c106",
+    "screen_geometry_source_sha256": "28d5d2c9a6184c6a0408017424604bdccadd011e2a14374ae813cd9824a9a219",
+    "display_counters": "outputs/UniXNU_marble/ios18-port/usb-r14/point-to-point/counters.json"
+  },
+  "R13 真机记录": {
+    "target": "22H384",
+    "status": "R13 临时启动，标准视图存在卡顿",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "R13 临时启动至桌面。标准视图恢复 375×812 点，布局问题减少。1125×2436 合成帧经 GPU 缩放至 1080×2400；提交至帧完成的中位耗时 12.065 ms，P95 为 19.333 ms。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r13/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r13/marble_temporary_boot.img",
+    "image_sha256": "d617b2752f1ea7c01eee8549fe645fb51c370793b2fb0b064d6b35c334f13350",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r13/kernel.macho",
+    "kernel_sha256": "4a582b2e95d1bb9d76b03d97a944b3ff3a891ed848126f81fce851a9c557cb7b",
+    "gpu_addon_sha256": "48eb9b05d6dc5deaf074b386aa0f80e88716833478244d6618167bb22c9124a4",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 sheng-dpu-scanout=2 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 appsync=1 marble-skip-setup=1 sheng-aks-sls=0 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "owner_trust_cache_sha256": "13c95a604b5efb3d7d8d87a48a861d47adafd837e3b7a991ed3679477a6739c5",
+    "phone_ui_source_sha256": "57db3966d55993424faf55d149a564845690353269bd6a419951170685fc7c1a",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r13/standard-view-performance/kernel.log"
+  },
+  "R15 构建": {
+    "target": "22H384",
+    "status": "R15 临时启动至桌面，标准视图采用显示硬件缩放",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "375×812 点标准布局运行。QSEED 0x3001 将 1125×2436 合成帧缩放至 1080×2400。9.1 秒采样完成 499 帧直扫，GPU 缩放计数增量为 0。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r15/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r15/marble_temporary_boot.img",
+    "image_sha256": "c29030948d1b6d2e3fe6ea9cfa88b6c25ba1eb71bdda8c21885298f489e58696",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r15/kernel.macho",
+    "kernel_sha256": "475fc2d1c1235f847a0a830bb6a403f9904daaa5945c0bd0cf7829c8dfa093a8",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-gpu-timeline=1 -v early_console=1 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 appsync=1 marble-skip-setup=1 sheng-aks-sls=0 sheng-dpu-scanout=3 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "owner_trust_cache_sha256": "42d8a7435807800bb4bb6abc3cb0b71e86068d837f615f9b0cb3501e380dcecb",
+    "display_source_sha256": "bc7e65db6e76611fa16284c2c595dcd98cf32032dcd7f1223a4891c0fd5a0a26",
+    "framebuffer_source_sha256": "bb94e0375f89beac32d2aebfc0dc8026ebb235082a5b8756098e42a1b2edf1fb",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r15/hardware-scaling/kernel.log"
+  },
+  "R16 构建": {
+    "target": "22H384",
+    "status": "R16 临时启动至桌面，标准档走显示硬件缩放",
+    "firmware": "outputs/UniXNU_marble/ios18-port/usb-firmware-r4/Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64/MarbleBootstrap.efi",
+    "firmware_sha256": "dfe9c69e844d51967bae0807eddc50ea11adeea7f6814b9820abda7a588c3dc3",
+    "wifi_runtime": "outputs/UniXNU_marble/ios18-port/wifi-runtime/report.json",
+    "device_result": "375×812 点，QSEED 0x3001 直扫 1125×2436 合成帧。真机交互采样 10.14 秒 145 帧直扫，GPU 拷贝计数增量为 0。放大档等待设备采样。",
+    "source_commit": "1d3278da",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r16/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r16/marble_temporary_boot.img",
+    "image_sha256": "a5707bc0f70334e9a48c527aea63cb5237e60888dcf111497df907953cb9e806",
+    "kernel": "outputs/UniXNU_marble/ios18-port/usb-r16/kernel.macho",
+    "kernel_sha256": "16790aea05424e23791fe5baf3c06c8b8a71f785efe5e750a344cbf7a886fc7d",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args": "offline-legacy-phase=4 offline-legacy-register=1 offline-legacy-gop=1 offline-legacy-pm=1 offline-legacy-transfer=1 offline-legacy-retire=1 offline-legacy-cpu-present=1 offline-legacy-validate=1 sheng-vsync=120 offline-key-events=1 sheng-aks=1 marble-ufs=1 owner-staged-apps=1 marble-adreno=1 sheng-fb-gpu=1 sheng-gpu-addon=1 sheng-fb-bgra=1 sheng-gpu-ttbr=2 sheng-early-retire=0 armcpu-self-ipi=1 marble-display-flip=1 sheng-vsync-fixed=1 owner-dataprotect=1 sheng-metal-flow=1 marble-display-mmio=1 sheng-gpu-preempt=2 msgbuf=1048576 sheng-gpu-trace=0 sheng-disable-jobs=com.apple.CommCenter,com.apple.locationd,com.apple.fairplayd.H2,com.apple.lskdd sheng-no-lc=1 marble-wifi=4 log-gpu=0 marble-audio=2 no-lc=1 gpu-addon=1 marble-sleep=1 marble-wifi-service=1 marble-haptics=2 qbt=1 appsync=1 marble-skip-setup=1 sheng-aks-sls=0 sheng-dpu-scanout=3 rootstage-runtime-usb=3 marble-native-services=0 cpus=7 smp=1 marble-ui-identity=1602 marble-display-scale=3",
+    "usb_owner": "firmware",
+    "firmware_usb_affinity": 256,
+    "darwinboot_sha256": "8a685fe7c14720d9e987074bc2cfa8ed344033a1b22494cf0ab6385019b82c0b",
+    "haptics_runtime": "outputs/UniXNU_marble/ios18-port/haptics-quiet/report.json",
+    "bluetooth_firmware_manifest_sha256": "7f91acd763b7f23b8e70c269dcc2956731729141dbb29e861989223541b6b37a",
+    "owner_trust_cache_sha256": "42d8a7435807800bb4bb6abc3cb0b71e86068d837f615f9b0cb3501e380dcecb",
+    "display_source_sha256": "85f8c8f95d3b58e277c4a3a99d8af75d3aa1003fe2461933c5169768747c7aa3",
+    "framebuffer_source_sha256": "afaac77e890e361c9a27de7be55a04527437b15ff6d758417943029c1142277d",
+    "setup_policy_source_sha256": "a90baa0e02af6a7d21fbb535c1182487b0ac9f0654b6e10580d4a28ba6169fd0",
+    "packer_source_sha256": "cb11bfbb1c6e772fbf8c22f97cbb8fe1ba85c74a3c788158d852a9cb5fff1066",
+    "log": "outputs/UniXNU_marble/ios18-port/usb-r16/runtime/kernel.log"
+  },
+  "R19 候选": {
+    "target": "22H384",
+    "status": "R19 临时启动至桌面，照片墙纸失败现场已采集",
+    "derived_from": "outputs/UniXNU_marble/ios18-port/usb-r18",
+    "derivation": "outputs/UniXNU_marble/ios18-port/usb-r19/derive.py",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r19/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r19/marble_temporary_boot.img",
+    "image_sha256": "64ff5731ce3663e970bb86b371ad967a832a944fe39d3dd907df8994d6dbfb63",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "671371f3a9bac4bc681366fb1d610aed441cae222e5668e9422e21100b11144f",
+    "boot_args_change": "sheng-gpu-trace=0 -> 1；新增 gpu-trace=1",
+    "device_result": "PhotosPosterProvider 的 Core Image 初始化内核库失败：newLibraryWithSource 编译 Core Image 运行时头源码时，前端未传入 MTLCompileOptions.additionalCompilerArguments（-D__BUILDING_RUNTIME_COMPILE_HEADER__ 等），第 434 行 #include <CIKernelMetalLibPrivate.h> 找不到文件。同时段 ci_stdlib_stitchable（220 个函数）上的滤镜内核查询返回 EntryNotFound。SBRendererService 启动时出现同一编译失败。",
+    "wallpaper_trace": "outputs/UniXNU_marble/ios18-port/usb-r19/wallpaper-trace/problems.json",
+    "observe": "outputs/UniXNU_marble/ios18-port/usb-r19/wallpaper-observe/sample-000/state.json"
+  },
+  "R20 候选": {
+    "target": "22H384",
+    "status": "临时启动至用户态，复现照片墙纸扩展反复退出",
+    "derived_from": "outputs/UniXNU_marble/ios18-port/usb-r19",
+    "derivation": "outputs/UniXNU_marble/ios18-port/usb-r20/derive.py",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r20/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r20/marble_temporary_boot.img",
+    "image_sha256": "db65394d6bb5975db18b4702fe72b50cc9d7e1140c15bdbdfe709e6bf07c6b4b",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "b67d275c1df1a1d1462b30ff6872f4f8d01b137bd73c622a7705754061807fe7",
+    "change": "addon 增加 addons/NativeAdrenoMetal.bundle/CIKernelMetalLibPrivate.h；仅在 Core Image 运行时头源码内联该头时定义 _BUILDING_CORE_IMAGE_LIB_，主机编译所得 AIR 与 Core Image 自带宏编译结果逐字节一致",
+    "device_result": "PhotosPosterProvider 收到 SIGSEGV；13 份退出记录均为 CIKernelReflection::consolidate 向地址 0 写入。按 PID 对照 GPU 事件环，61 个退出实例调用 NBFunction.returnType 和 NBFunction.arguments 时均收到 nil。",
+    "wallpaper_crash_stack": "outputs/UniXNU_marble/ios18-port/usb-r20/wallpaper-crash/crash-symbols.json",
+    "wallpaper_crash_trace": "outputs/UniXNU_marble/ios18-port/usb-r20/wallpaper-crash/correlation.json"
+  },
+  "R21 候选": {
+    "target": "22H384",
+    "status": "已临时启动；照片墙纸扩展持续运行，backboardd 因缓存同步失败拒绝 852 次提交，系统画面闪动",
+    "baseline": "R18 内核、Turnip、PhoneUI、QuartzCore 和显示参数",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r21/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r21/marble_temporary_boot.img",
+    "image_sha256": "0980cf0be5021d3d959028a85f93020c8d0bf158720595554f15f0798332572b",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "ffa1962acc230cb36ace626a89f9c7a6d577e41f05eb214ad577fdb0b27644a6",
+    "owner_trust_cache_sha256": "521e1beda6802892cbd473359e90c733784304e907bd2468cd280ec85a1dc845",
+    "plugin_cdhash": "af6c18f5a04248d2056ced083198a352d19941ad",
+    "translator_snapshot": "795192b3de3959a875c52ed2fb16a50ec79feb6c:ios27/sources/metal2vulkan",
+    "change": "传递 MTLCompileOptions.additionalCompilerArguments；从 AIR 读取可见函数和 Core Image 内核的返回类型与参数描述；使用完整的 244fa0228 翻译器与板级改动重建并签名插件。",
+    "build_log": "outputs/UniXNU_marble/ios18-port/usb-r21-inputs/plugin-r21.log",
+    "device_log": "outputs/UniXNU_marble/ios18-port/usb-r21/wallpaper.json",
+    "gpu_trace": "outputs/UniXNU_marble/ios18-port/usb-r21/wallpaper/gpu-trace/events.json",
+    "host_reflection_log": "outputs/UniXNU_marble/plugin-rebuild/wallpaper.95hy3x/frontend-host.log"
+  },
+  "R22 候选": {
+    "target": "22H384",
+    "status": "已启动；backboardd 重复 SIGSEGV，伴随 SpringBoard 和墙纸扩展重启，画面存在渲染缺陷。",
+    "baseline": "R21 的函数反射及附加编译参数，R18 的内核和 Turnip",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r22/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r22/marble_temporary_boot.img",
+    "image_sha256": "bb653cd41d532d31e08666f5591fba643edf5bfcb91d44adbaed0fb261e1addf",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "171ad0c7b6708f39a85a22dc83a927eddc77c1688a53a87dbbc5fe614f88a6a2",
+    "owner_trust_cache_sha256": "63354f9b1cff902024faa7c764ed55fcd5eb18ef5b59d0bd3cec57a5673b9960",
+    "plugin_cdhash": "e6d90f97e206776aac07b9125cd5ce564680c598",
+    "change": "桥接层根据 Vulkan 实际使用的内存调用缓存同步，复制型缓冲由运行时维护，导入缓冲仍做发布及获取。",
+    "build_log": "outputs/UniXNU_marble/ios18-port/usb-r21-inputs/gpu/plugin-build.log",
+    "copied_buffer_check": "outputs/UniXNU_marble/plugin-rebuild/wallpaper.95hy3x/cache-sync-copied.log",
+    "imported_buffer_check": "outputs/UniXNU_marble/plugin-rebuild/wallpaper.95hy3x/cache-sync-imported.log",
+    "backboard_exit_stack": "outputs/UniXNU_marble/ios18-port/usb-r22/regression/backboard-symbols.txt"
+  },
+  "R23 候选": {
+    "target": "22H384",
+    "status": "真机启动，照片墙纸闪退",
+    "baseline": "963f0e64 与 11 月 10 日的导入缓冲同步，R18 的内核、Turnip 与 PhoneUI",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r23/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r23/marble_temporary_boot.img",
+    "image_sha256": "c9d9ecc5f39853d6e28be4f3733135471c751ff21a8f8815f43b89ad474f95ec",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "fd6f623f87911508160cf7cfa09ec892ea823d9059fe676cc0793c9b409d267e",
+    "owner_trust_cache_sha256": "6a0eb4cfece3942acc6968e95952cbc999f1ec1eea09d8d86ed720070b99d1d2",
+    "plugin_cdhash": "d53934452d9422f12fe6c251240735cb12f507a7",
+    "translator_snapshot": "99945d2ee8aa671f5f1fdb67e5d06c00d10eb120:ios18/sources/metal2vulkan",
+    "buffer_source_sha256": "6869bd0889596b525b61344cbaa02b6c653172ed7335c3c4cd5738f5da035a70",
+    "change": "在原翻译器基线上接入 Core Image 编译参数与函数反射。",
+    "build_log": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/gpu/plugin-build.log",
+    "host_log": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/callable-host.log"
+  },
+  "R24 候选": {
+    "target": "22H384",
+    "status": "真机启动，照片墙纸闪退",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r24/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r24/marble_temporary_boot.img",
+    "image_sha256": "6c2cfcbd99d44a328e035d0630594f027461497d8514f9c47f834901b8bf1273",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "9aaf6daaa9e9167c9be54f7999cbd9edf0690bdd29a439af9fc395986021cc1e",
+    "owner_trust_cache_sha256": "81509dd23e1c849a4ca96d2ca87b98234100c977011193b6c79993ae53bcc7e1",
+    "gpu_plugin_cdhash": "d64c7febcb76540245c34cb2b99e1d3ba5828729",
+    "translator_snapshot": "99945d2ee8aa671f5f1fdb67e5d06c00d10eb120:ios18/sources/metal2vulkan",
+    "turnip_bundle_sha256": "0cfb021168ffa1acb1b4b88a5ca3af758595668ee02182583bebc38071f837b9",
+    "change": "从源参数恢复 Core Image destination 结构体。接入 extern 函数查询和参数种类。",
+    "host_log": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/cikl-bridge-host.log",
+    "host_regression": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/callable-regression-r24.log",
+    "startup": "outputs/UniXNU_marble/ios18-port/usb-r24/boot-runtime.json",
+    "wallpaper_crash": "outputs/UniXNU_marble/ios18-port/usb-r24/wallpaper-runtime/sample-001/state.json"
+  },
+  "R25 候选": {
+    "target": "22H384",
+    "status": "真机启动，添加照片墙纸失败",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r25/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r25/marble_temporary_boot.img",
+    "image_sha256": "e2ab1f8c77bc2a8e0f21663ddeaaa692f0578daf57f30eaff41d888c1341d447",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "fdbb02425da7aecaccf98ee4c4d4d9aacbbbaea343cfffb5ed5d42929cf01540",
+    "owner_trust_cache_sha256": "01d189283b3ed93fc75c8be5fbca01986104c2c46cff88dd6636f5101d6d4761",
+    "gpu_plugin_cdhash": "96b34c3dd95907556c3e7072f310beae1102af95",
+    "translator_snapshot": "99945d2ee8aa671f5f1fdb67e5d06c00d10eb120:ios18/sources/metal2vulkan",
+    "turnip_bundle_sha256": "0cfb021168ffa1acb1b4b88a5ca3af758595668ee02182583bebc38071f837b9",
+    "change": "为 Core Image 结构体提供 members 接口，报告 destination 的 float2 成员。",
+    "host_log": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/cikl-bridge-host-r25.log",
+    "host_regression": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/callable-host-r25.log",
+    "startup": "outputs/UniXNU_marble/ios18-port/usb-r25/launch.jsonl",
+    "wallpaper_trace": "outputs/UniXNU_marble/ios18-port/usb-r25/add-trace/events.json"
+  },
+  "R26 候选": {
+    "target": "22H384",
+    "status": "真机启动，添加照片墙纸失败",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r26/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r26/marble_temporary_boot.img",
+    "image_sha256": "af7f2750340dceb8d4e7a99a4f1bdad95b2ad95586b9af9ea2ab98b2d39400f4",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "5bf26bae49e8cf2116c1f8cc06619802156e3c2a96f88d8c31b89b51bdcc8763",
+    "owner_trust_cache_sha256": "5e3fedce32a2f2ed8bc7c58fca3ad02b7f3e5b3760297ab6edd5d499fee26d8d",
+    "gpu_plugin_cdhash": "578b320e644e8149a1620735f244560681a5c73e",
+    "translator_snapshot": "99945d2ee8aa671f5f1fdb67e5d06c00d10eb120:ios18/sources/metal2vulkan",
+    "turnip_bundle_sha256": "0cfb021168ffa1acb1b4b88a5ca3af758595668ee02182583bebc38071f837b9",
+    "change": "合成着色器时同一份 AIR 模块只交给链接器一次，关闭全局 GPU 追踪。",
+    "host_regression": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/callable-host-r26.log",
+    "startup": "outputs/UniXNU_marble/ios18-port/usb-r26/launch.jsonl",
+    "wallpaper_trace": "outputs/UniXNU_marble/ios18-port/usb-r26/launch/sample-002/state.json"
+  },
+  "R27 候选": {
+    "target": "22H384",
+    "status": "真机启动，墙纸添加结果待记录",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r27/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r27/marble_temporary_boot.img",
+    "image_sha256": "03b47ae12191ff5b06d5d1097104eefbc0c9ff2cd2112766557ef25857588ec4",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "gpu_addon_sha256": "9bfd930353bac67d577359494b88fe22e996a869a7c1dfef2b7f45251595c996",
+    "owner_trust_cache_sha256": "655beab477b623aa0235e85b4148d8f2810f2b38ec4771d20a11b1e9bef0209c",
+    "gpu_plugin_cdhash": "1d559dcb5cdf5fc71b11182b368efc62875b858f",
+    "translator_snapshot": "99945d2ee8aa671f5f1fdb67e5d06c00d10eb120:ios18/sources/metal2vulkan",
+    "turnip_bundle_sha256": "0cfb021168ffa1acb1b4b88a5ca3af758595668ee02182583bebc38071f837b9",
+    "change": "解析着色器图中的函数别名，保持原始 AIR 函数名。按编译内容、名称和常量计算稳定的函数摘要。",
+    "host_regression": "outputs/UniXNU_marble/ios18-port/usb-r23-inputs/callable-host-r27.log",
+    "startup": "outputs/UniXNU_marble/ios18-port/usb-r27/launch.jsonl",
+    "wallpaper_trace": "outputs/UniXNU_marble/ios18-port/usb-r27/add-runtime.json"
+  },
+  "R33 Apple USB": {
+    "target": "22H384",
+    "baseline": "R33",
+    "status": "真机临时启动，Apple USB 枚举和 lockdownd 查询成功",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/marble_temporary_boot.img",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "image_sha256": "88e818d3c03965981d8bd1f56e92ba8d819d415046cc76b97d01017997ec0896",
+    "gpu_addon_sha256": "f7e900fa53c012b604ab787ae30ebf4982db51b0bc8f6db5db7db916a6faf347",
+    "usb_owner": "kernel",
+    "runtime_usb_mode": 1,
+    "enabled_cpu_count": 8,
+    "device_result": {
+      "observed_at": "2026-11-19T06:01:03+08:00",
+      "vid_pid": "05ac:12a8",
+      "seconds_after_rootstage_detach": 43.454,
+      "ProductType": "iPhone16,2",
+      "ProductVersion": "18.7.11",
+      "BuildVersion": "22H384"
+    },
+    "boot_log": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/boot.log",
+    "usb_events": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/usb-events.jsonl",
+    "lockdownd": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/lockdown.txt",
+    "pairing": {
+      "status": "配对未建立",
+      "lockdownd_pair": "UserDeniedPairing",
+      "host_session_error": "kAMDInvalidHostIDError",
+      "host_pair_error": "kAMDPasswordProtectedError",
+      "host_log": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/pairing-host.log",
+      "client_log": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb/pairing-result.txt"
+    }
+  },
+  "R33 Apple USB 无锁屏密码": {
+    "target": "22H384",
+    "baseline": "R33 Apple USB",
+    "status": "临时启动成功，Apple USB 配对和会话成功",
+    "candidate": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/marble_temporary_boot.img",
+    "boot_arg": "sheng-aks-sls=3",
+    "keystore": "无锁屏密码",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "image_sha256": "01a529519e8a0866e8844edd22990f382aca420e6e25242186ada77805aeb7c1",
+    "gpu_addon_sha256": "f7e900fa53c012b604ab787ae30ebf4982db51b0bc8f6db5db7db916a6faf347",
+    "usb_owner": "kernel",
+    "runtime_usb_mode": 1,
+    "device_result": {
+      "paired_at": "2026-11-19T06:13:45+08:00",
+      "vid_pid": "05ac:12a8",
+      "seconds_after_rootstage_detach": 44.726,
+      "ProductType": "iPhone16,2",
+      "ProductVersion": "18.7.11",
+      "BuildVersion": "22H384",
+      "PasswordProtected": false
+    },
+    "boot_log": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/boot.log",
+    "usb_events": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/usb-events.jsonl",
+    "pairing": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/pair-attempt.json",
+    "pair_validation": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/pair-validation.txt",
+    "trusted_lockdownd": "outputs/UniXNU_marble/ios18-port/usb-r33-native-usb-no-passcode/trusted-lockdown.txt"
+  },
+  "R33 Flutter metallib": {
+    "target": "22H384",
+    "baseline": "R33 Apple USB 无锁屏密码",
+    "status": "Apple USB 临时镜像启动并完成配对，PiliPlus 首次场景激活成功，进入播放器时 OpenGL ES 上下文初始化触发 SIGTRAP",
+    "source": "795192b3de3959a875c52ed2fb16a50ec79feb6c",
+    "candidate": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/candidate/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/candidate/marble_temporary_boot.img",
+    "kernel_sha256": "6351daddcb68f6ef962286e4153b4584b36d7b4b1b2e9b919433affa1589f80f",
+    "image_sha256": "0893fbc026ecc30bf018a5cdd3316aa3a6fb37f76c7ebcda4959e720df2f3da5",
+    "gpu_addon_sha256": "e0103f886ea8127efcd2fc5a51815b23d5770123a08e27327ce4021d46f1f921",
+    "gpu_plugin_cdhash": "93b5a2202832005b72777e2dd0a117b27d57b62d",
+    "translator_patches_sha256": {
+      "patches/metal2vulkan/ios18-fresh-import-sync.patch": "a97ea627548a02f219a113660d83153d2a827d42c319f4bd24b29b88d5b65386",
+      "patches/metal2vulkan/ios18-legacy-metallib-header.patch": "7b19ce68a6d5b13b530e9a92367a7461467f0fc912894eb3299a18bf430fda15",
+      "patches/metal2vulkan/ios18-legacy-air.patch": "6396baabf6eebe74c583ca5e62bcb15def155b7540f0679ed89476c1101a13ba"
+    },
+    "usb_owner": "kernel",
+    "baseline_crash": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/baseline-crashes-summary.json",
+    "shader_results": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/shader-results.json",
+    "build_log": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/final-build/gpu/plugin-build.log",
+    "device_result": {
+      "usb_owner": "firmware",
+      "image_sha256": "09bb399cd60323f9c783cdfa34601dd52d804a19a022859be342d96b3bf7599a",
+      "candidate": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/device-observe/temporary-boot.json",
+      "PiliFlux": {
+        "version": "2.1.6+1",
+        "runner_pid": 389,
+        "earlier_exits": [
+          {
+            "pid": 322,
+            "code": "0x5",
+            "esr": "0xf2000001"
+          }
+        ],
+        "screenshot": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/device-observe/ui-latest.png",
+        "runtime": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/device-observe/piliflux-runtime/sample-000/state.json"
+      },
+      "PiliPlus": {
+        "apple_usb": "配对有效",
+        "launch": "应用场景激活成功",
+        "playback": "EAGLContext 初始化失败，触发 SIGTRAP",
+        "report": "outputs/UniXNU_marble/ios18-port/flutter-metallib-ios18/candidate/launch-check/piliplus-result.json"
+      }
+    }
+  },
+  "R33 电源与自动锁屏": {
+    "target": "22H384",
+    "baseline": "R33 Flutter metallib",
+    "source": "780d3b2d",
+    "source_acceptance": "records/ios27-24B119/sleep-scheduling-acceptance-2026-11-16.json",
+    "status": "RootStage 修复 Wi-Fi 断开完成通知与重连顺序，真机通过两轮锁屏休眠收包复测",
+    "kernel": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/wifi-resume/build/kernel.fileset.macho",
+    "candidate_audit": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/temporary-boot.json",
+    "springboard_method_abi": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/idle-method-types.txt",
+    "source_sha256": {
+      "package/MarbleIdlePolicy.m": "94e6a0d31a6c7862fb28b4a15884b4f2ad809e83a464216d6f7bfd5220a43a6f",
+      "package/MarbleCpu.cpp": "516feb2ea1b665342af989bcc3c08007a961582e2cb3e75f8dbb2b68cecc7103",
+      "package/MarbleCpuSleep.c": "8505a97ee04e7f24b5f00844be30aeb674680fe8a5261927b2d1f053ac70d46a",
+      "package/MarbleBacklight.cpp": "83f609d91022a2cdce2429a688037475b03c1224ff809bb3c608b42670a69be7",
+      "package/NativeHomeInput.cpp": "f78a9dd55cd3e52223efc4fa3774eb58971746aa886bdcf4ba845d74bbc7efa9",
+      "package/MarbleGmu.cpp": "f3314b0fd0c6f682568f4c992d62751691493e1c58607b25c32f634fb472fbd2",
+      "package/MarbleBattmgr.c": "bd52001a27bf797ed0f71ef019fd17371afae59f9f2fcb56b8ab62db3f54bc7d",
+      "scripts/pack_ios18_ufs.py": "1928469e35a1ea062e6de3f96d3df9be8d0b298ae96f7709dfde73afe6b4dea5",
+      "ios18/sources/ArmCpu/ArmCpu.cpp": "42d1934d09186a2a8e82ee4b941840753cd8f5078f48d3bd3006d71d45f1b7e9",
+      "package/MarblePhoneUI.m": "3791c0f8cda7e2ec168b9c74927da3c457215e5153a576a24da19495e4510f2b",
+      "package/MarbleDisplayEvents.h": "fee13b8e6b0a2708e3dac43a0a1cc9f24d22cfb625b93d24ec56914c51a3a7d7",
+      "scripts/build_phone_ui.py": "aa82aa1b6e92d69350185add80d6e31b39ada7d18acd6eabddcede1ff1836e23",
+      "package/MarblePkg/RootUsb.c": "baa7ab9f84546150c4d6bbc4246440d348909f2468c401387b3017d4352c3aad",
+      "package/MarblePkg/RootDisplay.c": "d7e930d3440dac38c9fd9bd9070881f7f9ceb203b79a72c7000bef53a8a7247e",
+      "package/MarbleNativePanel.cpp": "2834100fb6cbc65b2a79f5e0fa4a66ef10285964138015d6f9f1241744e61588",
+      "ios18/sources/Ath12kWifi/src/nw_mainline.c": "e78c7aacf1e1e27927ba4b7cfe77f7173c7f6b07b297d574e972f517426b0190",
+      "ios18/sources/Ath12kWifi/tests/mainline_runtime_test.c": "bc65ad47d01d3ec8706f83ad876987ce5daefe427f438948c008b24f839dad5e"
+    },
+    "candidates": {
+      "rootstage": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/marble_temporary_boot.img",
+        "image_sha256": "3fdd7b4cd5cea4353317b125ecf5db2e50da412f8cd9bc4edb47f7cadce3c31c",
+        "kernel_sha256": "32c7a92d9a5a3338be062fecbaa96e994c26f055a0f6958668219691117cb4dd",
+        "gpu_addon_sha256": "fcccf4db71aed0b8d9a2d87f3d6344adaa89e93d3167da689ecfad6d9d5dab30",
+        "cpu_count": 7,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 1010,
+        "powerd_usb_sleep": "enable-acsleep=1",
+        "device_result": {
+          "date": "2026-11-19",
+          "status": "RootStage 修复 Wi-Fi 断开完成通知与重连顺序，真机通过两轮锁屏休眠收包复测",
+          "stage_status": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/stage-status.json",
+          "prior_reconnect_timeout": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/wifi-resume/before/full.log",
+          "host_test": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/wifi-resume/test-mainline.log",
+          "wifi_retained_sleep": [
+            {
+              "locked_seconds": 180,
+              "resumes": 36,
+              "rx_frames_after_wake": 126,
+              "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/wifi-warm-resume.jsonl",
+              "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/after-180s.log"
+            },
+            {
+              "locked_seconds": 240,
+              "resumes": 55,
+              "rx_frames_after_wake": 88,
+              "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/wifi-extended-resume.jsonl",
+              "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/after-resume.log"
+            }
+          ],
+          "host_prior_failure": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/wifi-resume/test-before-fix.log",
+          "host_test_report": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/wifi-resume/test-module/out/mainline-runtime-test/report.json",
+          "observed_reconnect_scope": "真机休眠期间保持关联，断开与重连竞态由宿主针对此时序复现"
+        }
+      },
+      "apple-usb": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-idle-timer/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-idle-timer/marble_temporary_boot.img",
+        "image_sha256": "658a20006a4146b6933b53bc2c7493f1f4b1db16cbb583642566ce98fd57014e",
+        "kernel_sha256": "e646038250081a9907ebaae5c0ab1f0e934dc33ce70bb50acca8a41ed012536b",
+        "gpu_addon_sha256": "89d5881ef3463821c6494f649d20e7b89f4e2804b0da4c4ed182254331256cc1",
+        "cpu_count": 8,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 993,
+        "device_result": "构建完成，待真机启动"
+      }
+    },
+    "device_checkpoints": [
+      "按设置的时长自动锁屏并熄屏",
+      "三次休眠和唤醒的 CPU 与面板恢复",
+      "锁屏电流与温度",
+      "连续调亮度及熄屏切换时的 SpringBoard 退出记录"
+    ],
+    "superseded_candidates": {
+      "initial": {
+        "rootstage": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/marble_temporary_boot.img",
+          "image_sha256": "150ad059c2919627f5332ee401a5d2c94b00e194ae1b8c17f74b477db6acbe88",
+          "kernel_sha256": "f6d717c30c8c24b4de3ad53c39acface38127b1a6704f8709bfd78cd9e566fc8",
+          "cpu_count": 7,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 979,
+          "device_result": {
+            "date": "2026-11-19",
+            "springboard_pid": 27,
+            "backboardd_pid": 63,
+            "screen": "CoreBrightness 请求亮度归零，面板进入熄屏；两帧均为黑色",
+            "system_sleep": {
+              "configured": true,
+              "enters": 0,
+              "resumes": 0
+            },
+            "panic": "Sleep/Wake hang detected @IOPMrootDomain.cpp:12922",
+            "last_power_trace": "0x16 / PowerChangeDone: ON_STATE->SLEEP_STATE",
+            "boot_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/boot.log",
+            "pre_panic_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/wake-check/sample-000/state.json",
+            "panic_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/panic-detail/sample-000/state.json",
+            "panic_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/panic-detail/sample-000/kernel.log",
+            "recovery_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage/recovery.log"
+          }
+        },
+        "apple-usb": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb/marble_temporary_boot.img",
+          "image_sha256": "9625fd2a12e9d6a97bba30ff8fdf6ad19a5c7f1b599cbac5f70419fba6e28d81",
+          "kernel_sha256": "f6d717c30c8c24b4de3ad53c39acface38127b1a6704f8709bfd78cd9e566fc8",
+          "cpu_count": 8,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 979
+        }
+      },
+      "scheduler": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scheduler/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scheduler/marble_temporary_boot.img",
+        "result": "休眠入口和七个核心均进入，唤醒触发 ArmCpu::initCPU(false) panic",
+        "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scheduler/idle-cycle.jsonl"
+      },
+      "cpu_resume": {
+        "rootstage": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/marble_temporary_boot.img",
+          "image_sha256": "97c53d83c8c002cbb00223970e616811619039228b2fdc949a8c76e787e02343",
+          "kernel_sha256": "a0e7b5f7250c0ef8b64173e14c93d5e5ac0bf47acec9b5b0a79bad80f33cd568",
+          "cpu_count": 7,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 993,
+          "scheduler_initialization": "armcpu-edge=1",
+          "device_result": {
+            "date": "2026-11-19",
+            "springboard_pid": 27,
+            "backboardd_pid": 63,
+            "system_sleep": {
+              "enters": 25,
+              "resumes": 25,
+              "entries_by_cpu": [
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                25,
+                0
+              ],
+              "wake_sources": {
+                "173": "WCN PCIe MSI",
+                "261": "IPCC"
+              }
+            },
+            "screen": "出现熄屏请求，面板恢复供电，采集画面为黑帧",
+            "boot_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/boot.log",
+            "runtime_samples": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/idle-cycle.jsonl",
+            "wake_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/wake-ui/sample-000/state.json",
+            "wake_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/wake-ui/sample-000/kernel.log",
+            "screen_capture": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-resume/power-button-screen.png"
+          }
+        },
+        "apple-usb": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-resume-hold/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-resume-hold/marble_temporary_boot.img",
+          "image_sha256": "a398f861dead685a0b2985e8544808ebadb917bad3c031238f5299c45cc5782d",
+          "kernel_sha256": "a0e7b5f7250c0ef8b64173e14c93d5e5ac0bf47acec9b5b0a79bad80f33cd568",
+          "cpu_count": 8,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 993,
+          "scheduler_initialization": "armcpu-edge=1",
+          "device_result": "构建完成，待真机启动"
+        }
+      },
+      "dark_wake": {
+        "rootstage": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/marble_temporary_boot.img",
+          "image_sha256": "acaab4ca23bcaf36c7ea2b29cde4ddd6679e751a7df639c1c80d8d3d09923c43",
+          "kernel_sha256": "d9ead9001fb73aa248f0921cc924735e0240717018fdbaed2980e6513eed80e1",
+          "cpu_count": 7,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 993,
+          "scheduler_initialization": "armcpu-edge=1",
+          "device_result": {
+            "date": "2026-11-19",
+            "springboard_pid": 27,
+            "backboardd_pid": 63,
+            "system_sleep": {
+              "enters": 2,
+              "resumes": 2,
+              "entries_by_cpu": [
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                0
+              ],
+              "wake_sources": {
+                "173": "WCN PCIe MSI",
+                "261": "IPCC"
+              }
+            },
+            "screen": "两个后台唤醒周期内维持熄屏。虚拟电源键产生两份 HID 报告，面板维持熄屏，未收到非零亮度请求。",
+            "usb_charging_battery_temperature_c": [
+              33.9,
+              34.2
+            ],
+            "boot_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/boot.log",
+            "runtime_samples": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/idle-cycle.jsonl",
+            "power_button": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/power-button-result.json",
+            "final_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/final-state/sample-000/state.json",
+            "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-dark-wake/final-state/sample-000/kernel.log"
+          }
+        },
+        "apple-usb": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-dark-wake/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/apple-usb-dark-wake/marble_temporary_boot.img",
+          "image_sha256": "f28b543d7132580008007e9e1a42b893559adf388077ede5b5698e9fd038892e",
+          "kernel_sha256": "d9ead9001fb73aa248f0921cc924735e0240717018fdbaed2980e6513eed80e1",
+          "cpu_count": 8,
+          "sleep_disabled_adt": 0,
+          "boot_args_bytes": 993,
+          "scheduler_initialization": "armcpu-edge=1",
+          "device_result": "构建完成，待真机启动"
+        }
+      },
+      "locked_wake": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-locked-wake/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-locked-wake/marble_temporary_boot.img",
+        "image_sha256": "63db2916384f5c5f695c5a15a0ffa9c2c17462f919f070c2641355c0a386e75e",
+        "kernel_sha256": "e646038250081a9907ebaae5c0ab1f0e934dc33ce70bb50acca8a41ed012536b",
+        "cpu_count": 7,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 993,
+        "device_result": {
+          "date": "2026-11-19",
+          "sleep_entries": 22,
+          "sleep_resumes": 22,
+          "warm_wake": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-locked-wake/wake-result.png",
+          "wake_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-locked-wake/locked-boot-wake.jsonl",
+          "brightness_slider": {
+            "gestures": 8,
+            "writes": 246,
+            "primary_exits": [
+              0,
+              0
+            ],
+            "log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-slider/settings-brightness.jsonl"
+          },
+          "desktop_idle_observation": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-locked-wake/home-auto-lock.jsonl"
+        }
+      },
+      "rootstage-idle-timer": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/marble_temporary_boot.img",
+        "image_sha256": "7458763497e0338098fc57583ba14dc355b9014699edf485c4dbc03d67ab79c6",
+        "kernel_sha256": "e646038250081a9907ebaae5c0ab1f0e934dc33ce70bb50acca8a41ed012536b",
+        "gpu_addon_sha256": "89d5881ef3463821c6494f649d20e7b89f4e2804b0da4c4ed182254331256cc1",
+        "cpu_count": 7,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 993,
+        "device_result": {
+          "date": "2026-11-19",
+          "status": "两次桌面自动锁定及电源键亮屏，82 次休眠及恢复，保留 RootStage USB",
+          "system_sleep": {
+            "enters": 82,
+            "resumes": 82,
+            "entries_by_cpu": [
+              82,
+              82,
+              82,
+              82,
+              82,
+              82,
+              82,
+              0
+            ],
+            "wake_sources": {
+              "173": "WCN PCIe MSI",
+              "261": "IPCC"
+            }
+          },
+          "springboard_pid": 27,
+          "backboardd_pid": 63,
+          "desktop_auto_lock": {
+            "settings_seconds": 30,
+            "cycles": 2,
+            "panel_dim_observed_seconds": [
+              27.06,
+              27.06
+            ],
+            "panel_off_observed_seconds": [
+              36.06,
+              36.06
+            ],
+            "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/desktop-idle.jsonl",
+            "screens": [
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/desktop-wake-1.png",
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/desktop-wake-2.png"
+            ]
+          },
+          "slider": {
+            "gestures": 8,
+            "brightness_writes": 241,
+            "primary_exits": [
+              0,
+              0
+            ],
+            "log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/final-slider.jsonl"
+          },
+          "usb_charging_battery": {
+            "panel_off_observed_seconds": 132.01,
+            "first_battery_temperature_c": 33.1,
+            "last_battery_temperature_c": 32.0,
+            "last_samples_battery_current_ma_bounds": [
+              11,
+              48
+            ]
+          },
+          "retained_wake": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/wake-from-retained.jsonl",
+          "diagnostic_idle_reset": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-trace/idle-reasons/sample-000/kernel.log",
+          "final_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/final-state/sample-000/state.json",
+          "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/final-state/sample-000/kernel.log",
+          "idle_power_samples": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-idle-timer/final-power.jsonl"
+        }
+      },
+      "rootstage-lock-sleep": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/marble_temporary_boot.img",
+        "image_sha256": "76aaed4ab0a504156674585f35ad8d5456a57818c292de2ee04244b6aceef4e8",
+        "kernel_sha256": "e646038250081a9907ebaae5c0ab1f0e934dc33ce70bb50acca8a41ed012536b",
+        "gpu_addon_sha256": "89d5881ef3463821c6494f649d20e7b89f4e2804b0da4c4ed182254331256cc1",
+        "cpu_count": 7,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 1010,
+        "powerd_usb_sleep": "enable-acsleep=1",
+        "device_result": {
+          "date": "2026-11-19",
+          "status": "RootStage 真机完成三轮桌面自动锁定、整机休眠和唤醒，以及 180 秒熄屏复测",
+          "stage_status": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/stage-status.json",
+          "previous_idle_cancellation": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-side-button-wake/long-idle/kernel.log",
+          "desktop_auto_lock": {
+            "settings_seconds": 30,
+            "cycles": 3,
+            "panel_off_observed_seconds": [
+              32.75,
+              32.8,
+              32.74
+            ],
+            "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/desktop-acceptance.jsonl"
+          },
+          "retained_sleep": {
+            "entries": 40,
+            "resumes": 40,
+            "entries_by_cpu": [
+              40,
+              40,
+              40,
+              40,
+              40,
+              40,
+              40,
+              0
+            ],
+            "last_irq": 261
+          },
+          "side_button": {
+            "source": "RootStage USB 发送电源键，经固件 SGI 0 唤醒 XNU 与原生锁屏路径",
+            "cycles": 4,
+            "ack_ms": [
+              91,
+              88,
+              85,
+              84
+            ],
+            "panel_ms": [
+              398,
+              394,
+              392,
+              393
+            ],
+            "screens": [
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/desktop-cycles/1-auto-lockscreen.png",
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/desktop-cycles/2-auto-lockscreen.png",
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/desktop-cycles/3-auto-lockscreen.png",
+              "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/desktop-cycles/long-final-lockscreen.png"
+            ]
+          },
+          "locked_monitor": {
+            "seconds": 180,
+            "background_resumes": 26,
+            "screen_on_samples": 0,
+            "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/long-acceptance.jsonl"
+          },
+          "primary_ui_exits": [
+            0,
+            0
+          ],
+          "panic_count": 0,
+          "final_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/final-status.json",
+          "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-lock-sleep/final-log/kernel.log"
+        }
+      },
+      "rootstage-display-stability-early": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/marble_temporary_boot.img",
+        "image_sha256": "cb73be390b908ac19e4b5e1ca74484321dacfc5248d2219e6b2313e09337a157",
+        "kernel_sha256": "032d8332b2a11e8c5308259ebf651742d962f2e03875b97874033e351e07ac7c",
+        "gpu_addon_sha256": "fcccf4db71aed0b8d9a2d87f3d6344adaa89e93d3167da689ecfad6d9d5dab30",
+        "cpu_count": 7,
+        "sleep_disabled_adt": 0,
+        "boot_args_bytes": 1010,
+        "powerd_usb_sleep": "enable-acsleep=1",
+        "device_result": {
+          "date": "2026-11-19",
+          "status": "RootStage 修正熄屏后的短按分流及 DSI 亮度时序，实体键唤醒和亮度写入有真机记录",
+          "stage_status": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/stage-status.json",
+          "physical_key_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/physical-log/kernel.log",
+          "software_key_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/isolated-regression.jsonl",
+          "panel_ready_ms": [
+            516,
+            518,
+            543
+          ],
+          "sampled_screen_on_at_seconds": 4.5,
+          "slider_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-display-stability-early/slider-regression.jsonl",
+          "slider_gestures": 5,
+          "brightness_writes": 231,
+          "primary_ui_exits": [
+            0,
+            0
+          ],
+          "panel_end": "off",
+          "optical_frame_check": "待实屏逐帧观察"
+        }
+      }
+    },
+    "power_candidates": {
+      "date": "2026-11-19",
+      "ios27_reference": "780d3b2d",
+      "baseline": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-wifi-resume/temporary-boot.json",
+      "baseline_observation": {
+        "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/before.jsonl",
+        "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/before/kernel.log",
+        "sample_seconds": 10.36,
+        "battery_net_ma": -88,
+        "battery_temperature_c": 35.8,
+        "background_full_promotions": 13,
+        "timer_irqs_per_second": 1307.3,
+        "core_ipis_per_second": 1357.3
+      },
+      "darkwake_only": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-darkwake-ab/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-darkwake-ab/marble_temporary_boot.img",
+        "image_sha256": "80e656eeec57411000b3abad5400f9dbca74d0fdeb9f35b5bc3957d132986a59",
+        "kernel_sha256": "32c7a92d9a5a3338be062fecbaa96e994c26f055a0f6958668219691117cb4dd",
+        "boot_args_bytes": 1021,
+        "device_result": "真机启动。22H384 发布版内核跳过 darkwake 参数解析，日志记录 5 次后台恢复提升为完整唤醒。",
+        "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-darkwake-ab/darkwake-reconnected.log"
+      },
+      "rootstage": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power/marble_temporary_boot.img",
+        "image_sha256": "178b54b07296f969e0a280b0b33c1a18be9be5521b3b38cb342a4cdf47454686",
+        "kernel_sha256": "abc14f63456e2307fff4959103436168af3267a8c4a1cefc77127967f21f5247",
+        "boot_args_bytes": 1021,
+        "device_result": "原组合镜像保留。实际真机测量使用包含发布版 XNU 参数解析的 release 镜像。"
+      },
+      "source_sha256": {
+        "scripts/pack_ios18_ufs.py": "bb1f5deb269b7ce27e3be42edd7d447879ed04e0ba116d7df76f5a97d50919c7",
+        "package/MarbleUsbHealth.h": "bc419a42ec53ff2384db378be805f53168f7cf736c8a84c61db295351f893eee",
+        "package/MarblePkg/RootUsb.c": "50fa1c0d9839e2a0c7b5067bee0497c2e19b4f47a2db3f843156f15d43bea0bf",
+        "package/NativeResident.cpp": "470b28f1bf92e1e7136472bc1514bb0655d988e9ae81cd609c258d025dbb9336",
+        "package/MarbleCpu.cpp": "a3f94c29b920ccec56f507c281658ba0ae3a9b69e7d0f67a62bfcd9c062c547f",
+        "package/MarbleCpuSleep.c": "2f507c7f787adb0431e03acaa032bce7c3d916d53f0ceecf822b762af5743877",
+        "ios18/sources/ArmCpu/ArmCpu.cpp": "f3808c3dfc1609888a4a79fd4cdc41c4f9bc37080ba4c79ea8efbf9833d973f2",
+        "patches/xnu-11417/marble-retained-sleep.patch": "6b5925b2c61d8ee7d099263598a5e6c5cb451515786d6c2b0d9d9a4281e78106"
+      },
+      "release": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-release/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-release/marble_temporary_boot.img",
+        "image_sha256": "f644e4a28c83e5e041941e84b0ff3c43b302abe52e99161315c58e5b4f5158bf",
+        "kernel_sha256": "8308f04f08ebcd02ce9d7ab25675a3a1dd77ce1f050a3412f0d8766adbfbe7a5",
+        "boot_args_bytes": 1021,
+        "device_result": "退出候选。休眠后电源键请求到达内核，3.1 秒内面板保持熄屏。",
+        "observation": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-release/release-locked.jsonl",
+          "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-release/release-locked.log",
+          "locked_seconds": 150.77,
+          "retained_seconds": 124.03,
+          "retained_resumes": 456,
+          "battery_temperature_c": [
+            40.2,
+            38.6
+          ],
+          "battery_current_median_ma": -22,
+          "battery_current_range_ma": [
+            -246,
+            29
+          ],
+          "wifi_msi_wakes": 350,
+          "bluetooth_host_wakes": 75,
+          "ipcc_wakes": 31,
+          "log_background_full_promotions": 0,
+          "last_usb_disconnect_host_local_time": "2026-11-19 19:42:51 +0800"
+        }
+      },
+      "default_full_wake": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-default/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-default/marble_temporary_boot.img",
+        "image_sha256": "1bf2a6b0f416ee57de8fc1e1a6e4bf6fb25932446a704a11c92a42731a256e9c",
+        "kernel_sha256": "f4663dcf67fde4e31eefd3247fefbe888f8e2e3ff8061156a9976f536906115a",
+        "boot_args_bytes": 1010,
+        "device_result": "已构建。使用原生默认唤醒策略。待真机启动。"
+      },
+      "explicit_dark_wake": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-user-wake/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-user-wake/marble_temporary_boot.img",
+        "image_sha256": "bd06e7533d1cc80a02a22497736af8f262b4aca746a4bef5e9bee77e9fc0df44",
+        "kernel_sha256": "f4663dcf67fde4e31eefd3247fefbe888f8e2e3ff8061156a9976f536906115a",
+        "boot_args_bytes": 1021,
+        "device_result": "真机临时启动。两次从保留式休眠发出 RootStage 电源键，544 至 560 毫秒亮屏，4.5 秒后保持亮屏并维持 Wi-Fi 关联。锁屏 150.75 秒后再次亮屏。实体电源键和实屏单帧闪烁待观察。",
+        "observation": {
+          "wake_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/classified-wake-direct.jsonl",
+          "rtc_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/classified-wake-retry.jsonl",
+          "locked_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/revised-locked.jsonl",
+          "kernel_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-system-power-user-wake/revised-locked.log",
+          "slider_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/revised-slider.jsonl",
+          "final_state": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/revised-final-state.json",
+          "rootstage_key_panel_on_ms": [
+            560,
+            544
+          ],
+          "locked_seconds": 150.75,
+          "retained_seconds": 136.23,
+          "retained_resumes": 428,
+          "battery_temperature_c": [
+            38.6,
+            36.9
+          ],
+          "battery_percent": [
+            8,
+            8
+          ],
+          "battery_current_median_ma": 7,
+          "battery_current_range_ma": [
+            -73,
+            26
+          ],
+          "wifi_msi_wakes": 392,
+          "ipcc_wakes": 36,
+          "unclassified_full_promotions": 0,
+          "slider_drags": 5,
+          "slider_brightness_writes": 280,
+          "ui_exit_counts": [
+            0,
+            0
+          ]
+        }
+      },
+      "recovery_retest": {
+        "boot_time": "2026-11-19 19:52:50 +0800",
+        "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/recovered-wake-reconnect.jsonl",
+        "rootstage_key_panel_on_ms": [
+          516,
+          517
+        ],
+        "screen_on_at_4_5_s": true,
+        "wifi_associated": true
+      },
+      "scanout_idle": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle/marble_temporary_boot.img",
+        "image_sha256": "00bc5cac6ccdb4f49b0d6ca103bcedf9b6cd7dbb530782ad60fcc1bb10432e23",
+        "kernel_sha256": "ff870b6b7d6c9dc4e421f81f1402f6ced9932a8b5066012ffe6e4dbd33dfcb2d",
+        "boot_args_bytes": 1021,
+        "source_sha256": {
+          "package/MarbleScanout.cpp": "b3ef251b68196c3f8e0a9162484a9cfd97b0f06dc6527d2ee486bc461b3a0f98",
+          "package/MarblePkg/RootDisplay.c": "810cbec55f67df808d481a69ecbcd64db5608950fdbab433704efcf3ae93f087",
+          "package/MarbleBattery.cpp": "f459b5b4ab6d17550f8d591a939f3ef1ca3a058e0c1f772062e3d6d44a41eed0",
+          "patches/xnu-11417/marble-retained-sleep.patch": "4668c3c40d435710d1dc2f1bc248ac370e16266c868768285edd2881b070481d",
+          "ios18/sources/XnuPrelink/fixtures/fileset-22H384-symbols.json": "49df0c7989da340e3f9c4de52e8f2d248c943b69cc027c95d2cee8640b8d5e43"
+        },
+        "baseline_display_probe": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-display-off.jsonl",
+        "baseline_battery_trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-baseline.jsonl",
+        "device_result": "真实设备自动锁屏后显示时序停转，唤醒后恢复。首轮净电流平均 +79.3 mA，稳定期 270 秒平均 +103.4 mA，范围 +88 至 +114 mA。所有亮屏检查保持 Wi-Fi 关联。",
+        "display_probe": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-scanout-off.jsonl",
+        "runs": [
+          {
+            "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-live.jsonl",
+            "duration_s": 180.79,
+            "retained_s": 150.05,
+            "net_ma_mean": 79.3,
+            "net_ma_median": 88,
+            "net_ma_range": [
+              48,
+              106
+            ],
+            "battery_temperature_c": [
+              36.7,
+              35.7
+            ],
+            "wifi_wakes": 320,
+            "total_wakes": 356,
+            "screen_woke": true,
+            "wifi_associated": true
+          },
+          {
+            "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-settled.jsonl",
+            "duration_s": 270.82,
+            "retained_s": 253.02,
+            "net_ma_mean": 103.4,
+            "net_ma_median": 103,
+            "net_ma_range": [
+              88,
+              114
+            ],
+            "battery_temperature_c": [
+              35.0,
+              34.2
+            ],
+            "wifi_wakes": 616,
+            "total_wakes": 670,
+            "screen_woke": true,
+            "wifi_associated": true
+          }
+        ]
+      },
+      "scanout_idle_events": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-events/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-events/marble_temporary_boot.img",
+        "image_sha256": "e14d229205b2ea0a84df19c1a0d9d472235ab01a861947b022307d9745d3fbf8",
+        "kernel_sha256": "9a368f90e242b07b11b8af754124445cf9bff6a0580687613e73b6775327e1bf",
+        "boot_args_bytes": 1021,
+        "source_delta_sha256": {
+          "package/NativeResident.cpp": "8e6f35e8b783ca1a184b796ea1d6215d0ec73b77f318404a36e1c52f29d47f0d",
+          "package/MarbleCpuSleep.c": "220e4185cce253b8ace691c1f00d63ff9a364093fc5185f255bee1cefb9da25c",
+          "package/MarbleWifiRuntime.cpp": "01997e0a46e0268f386ebec581eb77c33cbc0f2ef0883cbcbadfa7f20e76d802"
+        },
+        "device_result": "220 秒熄屏有净充电，暂未达到 +100 mA 平均目标。驻留检查定时器计数为 0。测试电源键亮屏后 Wi-Fi 保持关联。",
+        "observation": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-events-retry.jsonl",
+          "duration_s": 220.83,
+          "net_ma_mean": 80.8,
+          "net_ma_median": 99.0,
+          "net_ma_range": [
+            -15,
+            110
+          ],
+          "battery_raw_mah": [
+            218,
+            221
+          ],
+          "wifi_wakes": 513,
+          "total_wakes": 589,
+          "mailbox_timer_checks": 0,
+          "screen_woke": true,
+          "wifi_associated": true
+        }
+      },
+      "scanout_idle_l3": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-l3/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-l3/marble_temporary_boot.img",
+        "image_sha256": "5f26429c9ffe14f9d0197fd6232515c4eec223364af6ae32d1c9ac2744bc4ad9",
+        "kernel_sha256": "2279806f003b84f18ea2e2ad1e5abe374269348d3b29977e83c7d7bb339e2d08",
+        "boot_args_bytes": 1021,
+        "source_delta_sha256": {
+          "package/MarbleCpu.cpp": "14e9004780598aba04d0eba5938185f256951398f017c7be418ffcf864f62b91"
+        },
+        "device_result": "L3 负载采样使用 CPU 空闲事件。锁屏约 270 秒，电量显示从 5% 到 6%，电池计量从 187 mAh 到 192 mAh。唤醒和 Wi-Fi 可用。",
+        "observation": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-l3-live.jsonl",
+          "duration_s": 270.83,
+          "net_ma_mean": 82.3,
+          "net_ma_median": 103,
+          "net_ma_range": [
+            -33,
+            114
+          ],
+          "battery_raw_mah": [
+            187,
+            192
+          ],
+          "wifi_wakes": 562,
+          "total_wakes": 679,
+          "mailbox_timer_checks": 0,
+          "screen_woke": true,
+          "wifi_associated": true
+        },
+        "radio_comparison": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-radio-ab.jsonl",
+          "wifi_disconnected_settled_ma": [
+            117,
+            117,
+            117,
+            117,
+            114,
+            114
+          ],
+          "wifi_restored": true
+        }
+      },
+      "scanout_idle_wlan": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-wlan/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-scanout-idle-wlan/marble_temporary_boot.img",
+        "image_sha256": "085dc68bdb393d75759245e636aff87ba815693ccb471f07100ef152b964e6b0",
+        "kernel_sha256": "33b8bd6eb4c05616d28590c69981662201d4c2bd0d56c67239730e23375bfeb6",
+        "boot_args_bytes": 1021,
+        "source_delta_sha256": {
+          "package/MarbleCpuSleep.c": "0f75ef4d536bc560bc16e9744bbd142c3b389d9999a94901191e246876fca061",
+          "package/MarbleWifi.h": "64f877d6aacc480ba403719aac1db765cf975806415161c5c992776aace06fac",
+          "package/MarbleWifiRuntime.cpp": "ade5c4eda5f32327bf21710ba6cf23806c8280510f06378db7ca751b857fe1fa"
+        },
+        "device_result": "真机启动并自动锁屏。采样期间合并计数为 0，收益待验证。",
+        "observation": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/system-power/net100-wlan-live.jsonl",
+          "duration_s": 108.08,
+          "net_ma_mean": 68.4,
+          "net_ma_median": 95,
+          "net_ma_range": [
+            0,
+            99
+          ],
+          "battery_raw_mah": [
+            148,
+            149
+          ],
+          "wifi_wakes": 237,
+          "total_wakes": 266,
+          "mailbox_timer_checks": 0,
+          "wlan_batch_counters": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "integrated": {
+        "baseline": "scanout_idle_l3",
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated/marble_temporary_boot.img",
+        "image_sha256": "889a6e7e5cc52af88894508f68cfb71a52c0103edce82ed52c1e6ae6608cbc26",
+        "kernel_sha256": "be6db890f96ac0db117b0547f90a98513e5446178fca9ca2c7b99b393d6c772e",
+        "boot_args_bytes": 1001,
+        "inputs_comparison": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/integrated/inputs-check.txt",
+        "changes": [
+          "合入显示电源键事件状态和 WebView 零 fence 等待逻辑",
+          "恢复 locationd",
+          "保留 L3 用户态附加包、可信模块、固件和 darkwake=0",
+          "WLAN MSI 批处理默认禁用"
+        ],
+        "observation": {
+          "trace": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated/integrated-power.jsonl",
+          "stall_snapshot": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated/springboard-stall/snapshot.json",
+          "services": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated/services.json"
+        },
+        "device_result": "进入系统，locationd 运行并交换网络数据。自动熄屏记录存在。真机出现显示队列卡顿，队首重试时画面提交计数停滞，退役的 WebView 所有者 fence 值为零也会进入等待。"
+      },
+      "integrated_display_recovery": {
+        "source_head": "1d3278da",
+        "source_tree": "current device checkout including local changes",
+        "packaging_baseline": "scanout_idle_wlan",
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-display-recovery/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-display-recovery/marble_temporary_boot.img",
+        "image_sha256": "57ff13124dd2918aa19c56e4e5affe1feeb8af72fdc934751ea8a1fc5045ed48",
+        "kernel_sha256": "41c02c4cc65c21213a10b7c5f2d0d4565e0d4be026b902533440e916ebb71874",
+        "boot_args_bytes": 1001,
+        "change": "按进程查询无待处理 GPU 作业时最多等待 2 ms；已捕获的非零 fence 继续等待，慢等待减少轮询频率。保留自动锁屏补丁所在的附加包，启用 locationd。"
+      },
+      "integrated_touch_wake": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-touch-wake/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-touch-wake/marble_temporary_boot.img",
+        "image_sha256": "8b462d4f1d13cf520f992689eafe10165c41d05987994d77ca2d27f085228c12",
+        "kernel_sha256": "da1e1eb67b407d318c0150b7e71666ea0d6893ae44e6916613c47d5e0c140613",
+        "device_result": "短触抬手触发亮屏。真机合成触摸测试一轮保持亮屏至第 4.6 秒，另一轮约 2.5 秒后熄屏。"
+      },
+      "integrated_snapshot_cache": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-snapshot-cache/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-snapshot-cache/marble_temporary_boot.img",
+        "image_sha256": "9aa8c01a279e787752cf6153f324d414845ed9f219c41cab21222be911f65beb",
+        "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+        "device_result": "RootStage 导出截图前写回输出缓存。纯白页截图可出现干净帧；健身动画的绿线仍存在。",
+        "fitness_evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-snapshot-cache/static-005235.png"
+      },
+      "integrated_gpu_overlay": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-gpu-overlay/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-gpu-overlay/marble_temporary_boot.img",
+        "image_sha256": "5bd01feb2a40d87ddc50e4427a4d27499c9b35c7679dc304bbfde1d9627df91d",
+        "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+        "device_result": "同一 fileset 和启动参数，替换 Metal 与 Turnip 程序及签名；健身动画重现绿线。",
+        "fitness_evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-gpu-overlay/fitness-4.png"
+      },
+      "integrated_explicit_cache": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-explicit-cache/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-explicit-cache/marble_temporary_boot.img",
+        "image_sha256": "494968f87a9eae1baee9ad3a400385b32eee321ee7b7d9c9372cd7d6e220cd63",
+        "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+        "device_result": "同一 fileset 和附加包，设置 marble-gpu-coherent=0；健身动画重现绿线。",
+        "fitness_evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-explicit-cache/fitness-4.png"
+      },
+      "integrated_fence_flush": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/marble_temporary_boot.img",
+        "image_sha256": "7001f820199cb44375bf289a8253e07362d49f44c339de7c4077d7ef0a215c3f",
+        "kernel_sha256": "63f0fc519dd7eaeed41649aa2907d05c1e56b56d450c2c1c3d7ade10b502683b",
+        "device_result": "framed fence 前增加 CACHE_FLUSH7 和 CP_WAIT_FOR_IDLE。主机命令序列测试通过，设备仍呈现动画绿线，实验开关默认关闭。",
+        "fitness_counters": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/fitness-state.json"
+      },
+      "integrated_single_gpu_ring": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-single-gpu-ring/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-single-gpu-ring/marble_temporary_boot.img",
+        "image_sha256": "feb247982aaab02464d0d4c3521c130152b7f06da279c8cb7bffa304ac45f60c",
+        "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+        "device_status": "待启动",
+        "change": "同一内核及附加包，仅设置 sheng-gpu-preempt=0。"
+      },
+      "safari_springboard_incident": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/marble_temporary_boot.img",
+        "image_sha256": "7001f820199cb44375bf289a8253e07362d49f44c339de7c4077d7ef0a215c3f",
+        "kernel_sha256": "63f0fc519dd7eaeed41649aa2907d05c1e56b56d450c2c1c3d7ade10b502683b",
+        "usb_state": "Mac USB 设备树未显示 marble；线缆状态未知。",
+        "latest_local_evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-fence-flush/gpu-probe/kernel.log",
+        "crash_report": "待获取 SpringBoard 和 MobileSafari 或 WebKit 的进程退出与崩溃记录。",
+        "rollback": {
+          "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-snapshot-cache/temporary-boot.json",
+          "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-snapshot-cache/marble_temporary_boot.img",
+          "image_sha256": "9aa8c01a279e787752cf6153f324d414845ed9f219c41cab21222be911f65beb",
+          "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+          "profile": "保留截图导出与显示队列修复，使用原主线图形附加包以及默认 GPU fence。",
+          "device_status": "待 RootStage 恢复枚举后验证。"
+        },
+        "transport_candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-usb-detach-recovery/temporary-boot.json",
+        "mac_usb_log": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/incident-safari-springboard/mac-usb.log",
+        "mac_link_lost_at": "2026-11-20T01:33:00.144+08:00"
+      },
+      "integrated_usb_detach_recovery": {
+        "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-usb-detach-recovery/temporary-boot.json",
+        "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-integrated-usb-detach-recovery/marble_temporary_boot.img",
+        "image_sha256": "0227131b5eb382c113253340c047439c4e01d1aca22891e52b6cf44fa63b5663",
+        "kernel_sha256": "dc7c49d1238da628c606d5226178aa441d328603e365138561242a13d5283aae",
+        "bootstrap_sha256": "031a7cb2d97eb13b1a0b7cea5b0eeab9291173812f45749ce4e18099af88bc68",
+        "source": "package/MarblePkg/RootUsb.c",
+        "device_status": "待真机验证",
+        "baseline": "integrated_snapshot_cache",
+        "change": "运行中的 RootStage 收到断开事件时，等待两秒；期间恢复连接则取消重试，否则重启 USB 控制器一次。"
+      }
+    }
+  },
+  "iOS 18 蓝牙": {
+    "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-native/temporary-boot.json",
+    "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-native/marble_temporary_boot.img",
+    "image_sha256": "46c6a53939c3632ddf0b82930045adb0740b7319ead5b4dcd00067d3a30e3296",
+    "kernel_sha256": "5e9693626745e4e59ed01cad21aff861de98ffb7f8a4308b44db101dd22d9e24",
+    "base_archive_kernel_sha256": "63f0fc519dd7eaeed41649aa2907d05c1e56b56d450c2c1c3d7ade10b502683b",
+    "packaging_baseline": "rootstage-integrated-usb-detach-recovery",
+    "bluetooth_source_reference": "UniXNU/QcaBluetooth fa528145aee3073c47533d74ea260eb2818b6b63",
+    "marble_ios27_reference": "780d3b2d",
+    "runtime": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/runtime/report.json",
+    "host_checks": [
+      "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/host-tests/runtime.log",
+      "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/host-tests/geni.log",
+      "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/host-tests/session.log",
+      "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/package-check.log"
+    ],
+    "device_status": "真机进入内核，UART.SK 注册。bluetoothd 在偏移 0x378e1c 读取空控制器对象，SIGSEGV。",
+    "pending": [
+      "控制中心开关",
+      "AirPods A2DP 播放、休眠与重连",
+      "蓝牙键盘配对、输入、休眠与重连",
+      "空闲与连接状态的耗电"
+    ],
+    "boot_evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-native/boot-followup/bluetooth-exit.json",
+    "controller_candidate": {
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-controller/marble_temporary_boot.img",
+      "image_sha256": "d8180c2d1d38956cd5f0f9c899a576a0232b6d4b654c658ab5d331f526f0684c",
+      "device_status": "控制器启动。初始化流程遇到控制器不支持的 HCI 0x0c5b，服务退出。",
+      "change": "未匹配板型时，使用原生构造函数建立通用控制器对象。"
+    },
+    "diagnostic_image": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/marble_temporary_boot.img",
+      "image_sha256": "32faabaaa2094d3d86e0b8dee948daf054d03e59475e28caebbd2e0811cb5039",
+      "kernel_sha256": "44b5aa4128d17e12d5f70e61d8977a8ef7b77649878cc14b0e210141241548d0",
+      "device_result": "设置开关可用。05:50 样本记录三条经典连接认证通过，控制器受理开启加密请求，链路随后以 0x08 超时断开。05:55 样本记录 PID 90 因取消待连接请求超时退出。",
+      "evidence": [
+        "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/observation/055029-transport.json",
+        "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/observation/055520-transport.json",
+        "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/observation/05-55-bluetoothd-exits.json"
+      ]
+    },
+    "le_family_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-family/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-family/marble_temporary_boot.img",
+      "image_sha256": "65598b0862e73e3f41fdba7dc9fa8c31b4cfeca090a77917d07dd101ce92fc93",
+      "kernel_sha256": "44b5aa4128d17e12d5f70e61d8977a8ef7b77649878cc14b0e210141241548d0",
+      "change": "按控制器支持的 HCI 命令启用原生扩展低功耗扫描、广播和连接路径。",
+      "host_check": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/le-family-pack.log",
+      "device_status": "真机启用扩展扫描、广播与连接。扫描返回成功。板型的默认广播实例数为 0。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-family/observation/bluetoothd-capabilities.json"
+    },
+    "le_advertising_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-advertising/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-advertising/marble_temporary_boot.img",
+      "image_sha256": "25503c6fdd7c71060ef5ab8fca3d25e5278e1f7b679dfa79a4cf1ab89675cc45",
+      "kernel_sha256": "44b5aa4128d17e12d5f70e61d8977a8ef7b77649878cc14b0e210141241548d0",
+      "change": "标准扩展广播启用时，为无板型配置的控制器分配一个广播实例。",
+      "package_check": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-advertising/observation/package-check.log",
+      "device_status": "真机读取到扩展扫描、广播和连接能力，广播配置为一个实例。经典连接返回搜索超时，真机出现扫描回归。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-advertising/observation/bluetoothd-runtime.json",
+      "pairing_failure": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-advertising/observation/061602-transport.json"
+    },
+    "power_reopen_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-power-reopen/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-power-reopen/marble_temporary_boot.img",
+      "image_sha256": "d8b105d79c9eb8b1f8765dc9d6060aec31267ad59ebca29a00485ea261cdaa0f",
+      "kernel_sha256": "2c40d4a7edbadfdfca284887b319e44f20ae0899b263ff56228df81ec74b7489",
+      "change": "蓝牙服务和控制通道共享同一个上电请求，关断完成保留新请求及排队命令。",
+      "reproduction": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-acl/observation/062611-transport.json",
+      "host_check": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/host-tests/power-reopen.log",
+      "device_status": "待真机覆盖连续开关和配对。"
+    },
+    "rx_frame_clock_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-rx-frame-clock/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-rx-frame-clock/marble_temporary_boot.img",
+      "image_sha256": "d02d5e2b4700f7d13cbfa007e805d254818b2daa7b9d606db9cafde9a8882b68",
+      "kernel_sha256": "ac7dc2a0143a29cf6fd1e3006e5cdb0b6a6e601dadc6537987e6e0994687991f",
+      "change": "蓝牙接收数据帧未完成时保留串口时钟，覆盖帧头与载荷分段。",
+      "host_check": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/bluetooth-22H384/host-tests/fragmented-rx-after.log",
+      "device_status": "真机启动并运行蓝牙服务。扫描有广播，低功耗连接 60 次返回命令拒绝。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-rx-frame-clock/observation/discovery-counts.json"
+    },
+    "le_connect_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-connect/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-connect/marble_temporary_boot.img",
+      "image_sha256": "de1b44ad3a1eb4e1d606cc98e434139018657d48b990e2c1b7aada67dc8a9fe2",
+      "kernel_sha256": "ac7dc2a0143a29cf6fd1e3006e5cdb0b6a6e601dadc6537987e6e0994687991f",
+      "change": "按控制器能力启用原生扩展低功耗连接命令。",
+      "device_status": "真机受理扩展低功耗连接，采到建立连接和短时断开。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-le-connect/observation/072855-transport.json"
+    },
+    "page_retry_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-page-retry/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-page-retry/marble_temporary_boot.img",
+      "image_sha256": "29fbb853c506d89106070a6505644b45b33821312ea28ca439009b19de1b7744",
+      "kernel_sha256": "3b01109d3037ea07604dd6b72074a67a700f06714fee819616c0469fb00caa8c",
+      "change": "WCN6855 经典连接搜索超时后，针对同一外设使用无时钟偏移的 R2 参数。",
+      "device_status": "真机执行备用搜索，七次均返回 Page Timeout。一次低功耗鼠标连接注册蓝牙 HID，点击重连后两次请求均被系统取消。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-page-retry/observation/080723-transport.json",
+      "reconnect": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-page-retry/observation/081804-transport.json",
+      "discovery": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-page-retry/observation/discovery-aging-sample.json"
+    },
+    "consistent_le_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-consistent-le/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-consistent-le/marble_temporary_boot.img",
+      "image_sha256": "ec74f282ad00f65f3a8fa125a3bc3a44dbfce3779954d72361c41f77ef5a5428",
+      "kernel_sha256": "3b01109d3037ea07604dd6b72074a67a700f06714fee819616c0469fb00caa8c",
+      "change": "读取控制器支持命令及系统下发板型配置时，使用同一规则选择低功耗连接命令。",
+      "device_status": "真机首次进入设置扫描，低功耗广播累计 518 条，其他设备列表为空。关开后列表出现一项新设备。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-consistent-le/observation/cold-start-discovery.json"
+    },
+    "active_scan_candidate": {
+      "candidate": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-active-scan/temporary-boot.json",
+      "image": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-active-scan/marble_temporary_boot.img",
+      "image_sha256": "15e80b37e002526ccce38bbea6850619a5f64be842a0c875df240db973164058",
+      "kernel_sha256": "4c6e208c2641bcf646fb4b73abc9928541ea94ca58cc11f4e551913ff8c28266",
+      "change": "WCN6855 主动扫描由系统处理广播去重，保留被动扫描的控制器过滤。",
+      "device_status": "真机冷启动进入蓝牙设置，累计 950 条低功耗广播，其他设备列表为空。扫描和连接故障仍待修复。",
+      "evidence": "outputs/UniXNU_marble/ios18-port/power-v62-ios18/final/rootstage-bluetooth-active-scan/observation/cold-start-discovery.json"
+    }
   }
 }

@@ -15,11 +15,13 @@ from marble_display_geometry import display_geometry, display_layout
 
 from build_ios18_arm64e import DEVICE, ADSP_FIRMWARE, PROFILE as OS_PROFILE, read_adt, write_adt, validate_prelink
 from build_pac_uefi import build_applications, pack_boot_image
+from marble_sources import stage_ios18_build, stage_ios18
 
 USB_AFFINITY = int(re.search(r'^#define MARBLE_USB_AFFINITY (0x[0-9a-fA-F]+)$',
     (DEVICE / 'package/MarblePkg/MarbleCpuOwnership.h').read_text(), re.M).group(1), 16)
 XNU_AFFINITIES = [value for value in range(0, 0x800, 0x100) if value != USB_AFFINITY]
 DARWIN_BOOT_ARGS_LIMIT = 1023  # DarwinBoot reserves 1024 bytes including the terminator.
+DEFAULT_DISABLED_JOBS = 'com.apple.CommCenter,com.apple.locationd'
 
 
 def merge_kernel_args(base, additions):
@@ -87,7 +89,7 @@ def main():
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--assets', required=True, type=Path)
     parser.add_argument('--images', required=True, type=Path)
-    parser.add_argument('--data-seed', required=True, type=Path)
+    parser.add_argument('--data-seed', type=Path, help='Required without a baseline candidate')
     parser.add_argument('--storage-profile', type=Path, default=DEVICE / 'profiles/marble-storage-22H384.json',
                         help='Persistent Data geometry and identity for this board')
     parser.add_argument('--temporary', action='store_true',
@@ -98,11 +100,13 @@ def main():
                         help='Controller owner while XNU runs; kernel ownership uses all eight CPUs')
     parser.add_argument('--vsync', type=int, default=120,
                         help='Display presentation cadence')
-    parser.add_argument('--gpu-addon', type=Path, help='22H384 NGPUADD2 bundle; defaults to ROOT/gpu/metal.gpuaddon')
+    parser.add_argument('--gpu-addon', type=Path,
+                        help='22H384 NGPUADD2 bundle; defaults to the baseline payload or ROOT/gpu/metal.gpuaddon')
     parser.add_argument('--appsync-runtime', type=Path, help='Built 22H384 AppSync runtime directory')
     parser.add_argument('--wifi-runtime', type=Path, help='Signed iOS 18 supplicant and launchd cache')
     parser.add_argument('--haptics-runtime', type=Path, help='Signed 22H384 Actuator HAL and tuning overlay')
     parser.add_argument('--wifi-firmware', type=Path, help='WCN6855 firmware matching profiles/wifi-wcn6855-hw21.json')
+    parser.add_argument('--bluetooth-runtime', type=Path, help='Signed BlueTool and launchd cache built from the baseline addon')
     parser.add_argument('--bluetooth-firmware', type=Path, help='Stock marble Bluetooth firmware matching firmware/bluetooth/manifest.json')
     parser.add_argument('--kernel', type=Path, help='New fileset kernel built from the current device sources')
     parser.add_argument('--firmware-binaries', type=Path, help='Built MarbleBoot AARCH64 applications for this candidate')
@@ -112,8 +116,8 @@ def main():
                         help='Integer artwork scale; FrontBoard uses the panel-to-layout point scale')
     parser.add_argument('--cpu-regs', default=','.join(hex(value) for value in XNU_AFFINITIES),
                         help='XNU CPU affinities excluding the resident USB service owner')
-    parser.add_argument('--disabled-jobs', default='com.apple.CommCenter,com.apple.locationd',
-                        help='Board services excluded until their hardware backend is available')
+    parser.add_argument('--disabled-jobs',
+                        help='Override the comma-separated launchd job labels in the boot arguments')
     parser.add_argument('--kernel-arg', action='append', default=[], help='Additional NAME=VALUE runtime setting')
     parser.add_argument('--skip-setup', action='store_true', help='Persist Setup completion before launchd starts')
     args = parser.parse_args()
@@ -138,13 +142,29 @@ def main():
     if not cpu_regs or cpu_regs[0] != 0 or len(set(cpu_regs)) != len(cpu_regs) or any(
             value not in allowed_affinities for value in cpu_regs):
         parser.error('--cpu-regs must select distinct XNU-owned affinities, starting with 0')
-    metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
+    if args.data_seed:
+        metadata = persistent_data_metadata(args.data_seed.resolve(), args.storage_profile.resolve())
+    elif candidate:
+        profile = json.loads(args.storage_profile.read_text())
+        if (candidate['storage_profile_sha256'] != hashlib.sha256(args.storage_profile.read_bytes()).hexdigest()
+                or candidate['data_uuid'].upper() != profile['data_volume_uuid'].upper()
+                or candidate['data_logical_bytes'] != profile['data_logical_bytes']):
+            parser.error('Baseline Data identity differs from the storage profile')
+        metadata = dict(volume_uuid=candidate['data_uuid'], logical_bytes=candidate['data_logical_bytes'])
+    else:
+        parser.error('--data-seed is required without --baseline')
     root, out = args.root.resolve(), args.assets.resolve()
     out.mkdir(parents=True, exist_ok=True)
     platform = DEVICE / 'firmware'
-    binaries = (args.firmware_binaries.resolve() if args.firmware_binaries else
-                args.baseline / 'Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64' if candidate
-                else build_applications(out, platform, DEVICE.parent / 'UniXNU'))
+    if args.firmware_binaries:
+        binaries = args.firmware_binaries.resolve()
+    elif candidate:
+        binaries = args.baseline / 'Build/MarbleBoot/RELEASE_CLANGPDB/AARCH64'
+    else:
+        # The iOS 18 handoff uses the v3 RootStage table in its DarwinBoot.
+        stack = stage_ios18_build(out / 'firmware-stack')
+        stage_ios18('DarwinBoot', stack / 'drivers/DarwinBoot')
+        binaries = build_applications(out, platform, stack)
     kernel = out / 'kernel.macho'
     selected_kernel = args.kernel or (args.baseline / 'kernel.macho' if candidate else root / 'kernel.fileset.macho')
     shutil.copyfile(selected_kernel, kernel)
@@ -153,10 +173,43 @@ def main():
                 if candidate and args.kernel is None else validate_prelink(root))
     if hashlib.sha256(kernel.read_bytes()).hexdigest() != baseline['candidate_sha256']:
         raise ValueError('Kernel differs from the current prelink report')
-    addon = (args.gpu_addon or root / 'gpu/metal.gpuaddon').resolve()
-    gpu = json.loads((root / 'gpu/userspace.json').read_text())
+    inherit_addon = candidate is not None and not any((
+        args.gpu_addon, args.appsync_runtime, args.wifi_runtime, args.haptics_runtime,
+        args.wifi_firmware, args.bluetooth_firmware,
+    ))
+    if inherit_addon:
+        addon = args.baseline / 'stage/EFI/UniXNU/Payloads/kernel.macho.gpuaddon'
+        gpu = dict(addon_sha256=candidate['gpu_addon_sha256'], sources=candidate['gpu_sources'],
+                   trust_cache_sha256=candidate['owner_trust_cache_sha256'])
+    else:
+        addon = (args.gpu_addon or root / 'gpu/metal.gpuaddon').resolve()
+        gpu = json.loads((root / 'gpu/userspace.json').read_text())
     if hashlib.sha256(addon.read_bytes()).hexdigest() != gpu['addon_sha256']:
         raise ValueError('GPU addon differs from its signed userspace build')
+    bluetooth_runtime = None
+    if args.bluetooth_runtime:
+        if not inherit_addon or not args.temporary or 'qbt=1' not in candidate['boot_args'].split():
+            parser.error('--bluetooth-runtime requires a temporary Bluetooth-enabled baseline with its complete addon')
+        runtime = args.bluetooth_runtime.resolve()
+        bluetooth_runtime = json.loads((runtime / 'report.json').read_text())
+        expected_files = {'bin/unixnu-BlueTool', 'xpc/launchd.plist', 'xpc/launchd.plist.sig'}
+        if bluetooth_runtime.get('daemon_input_sha256'):
+            expected_files.add('bin/bluetoothd')
+        if ((bluetooth_runtime['target'], bluetooth_runtime['build']) != ('ios18', '22H384')
+                or bluetooth_runtime['baseline_addon'] != gpu['addon_sha256']
+                or bluetooth_runtime['files'].keys() != expected_files):
+            raise ValueError('Bluetooth runtime must target the exact 22H384 baseline addon')
+        for relative, digest in bluetooth_runtime['files'].items():
+            if hashlib.sha256((runtime / relative).read_bytes()).hexdigest() != digest:
+                raise ValueError('Bluetooth runtime differs from its build: ' + relative)
+        for entry in ('bin', 'xpc'):
+            if {str(path.relative_to(runtime)) for path in (runtime / entry).rglob('*') if path.is_file()} != {
+                    relative for relative in expected_files if relative.startswith(entry + '/') }:
+                raise ValueError('Unexpected files in Bluetooth runtime ' + entry)
+        modified = out / 'bluetooth-runtime.gpuaddon'
+        subprocess.run([sys.executable, DEVICE / 'ios18/source/scripts/addon-add-dir.py', addon, modified,
+                        'bin', runtime / 'bin', 'xpc', runtime / 'xpc'], check=True)
+        addon = modified
     appsync = None
     if args.appsync_runtime:
         addon, appsync = append_appsync(addon, args.appsync_runtime.resolve(), out / 'runtime.gpuaddon')
@@ -246,16 +299,27 @@ def main():
     cpu_args = 'armcpu-self-ipi=1'
     boot_args += ' ' + cpu_args + f' marble-display-scale={args.display_scale}'
     boot_args += f' marble-ui-identity={identity["generation"]}'
-    if args.disabled_jobs:
-        boot_args += ' sheng-disable-jobs=' + args.disabled_jobs
     if candidate:
+        # Bring-up diagnostics can be set explicitly with --kernel-arg.
+        diagnostic_args = {'sheng-gpu-timeline', 'sheng-display-trace', 'marble-refresh-display-cache'}
+        if native_usb:
+            # Keep the native USB session's powerd assertion policy.
+            diagnostic_args.add('enable-acsleep')
         boot_args = ' '.join(arg for arg in candidate['boot_args'].split()
+                             if arg.partition('=')[0] not in diagnostic_args
                              if not arg.startswith('sheng-smp=') and
                              arg not in ('marble-input-profile=0', 'sheng-diag=0'))
         if (candidate['data_uuid'].upper() != metadata['volume_uuid'].upper()
                 or candidate['data_logical_bytes'] != metadata['logical_bytes']):
             raise ValueError('Candidate Data identity differs from the selected installation')
     try:
+        if args.disabled_jobs:
+            boot_args = merge_kernel_args(boot_args, ['sheng-disable-jobs=' + args.disabled_jobs])
+        elif args.disabled_jobs == '':
+            boot_args = ' '.join(token for token in boot_args.split()
+                                 if token.partition('=')[0] != 'sheng-disable-jobs')
+        elif candidate is None:
+            boot_args += ' sheng-disable-jobs=' + DEFAULT_DISABLED_JOBS
         if native_usb:
             args.kernel_arg+=['rootstage-runtime-usb=1','marble-native-services=1',f'cpus={len(cpu_regs)}']
         else:
@@ -265,9 +329,18 @@ def main():
             args.kernel_arg.append('appsync=1')
         if args.skip_setup:
             args.kernel_arg.append('marble-skip-setup=1')
-        boot_args = merge_kernel_args(boot_args, ['sheng-aks-sls=3', *args.kernel_arg,
+        boot_args = merge_kernel_args(boot_args, ['sheng-aks-sls=3', 'marble-sleep=1', *args.kernel_arg,
                                                       f'marble-ui-identity={identity["generation"]}',
                                                       f'marble-display-scale={args.display_scale}'])
+        tokens = boot_args.split()
+        if 'marble-sleep=1' in tokens:
+            if len(cpu_regs) > 1:
+                # XNU requires scheduler CPU initialization before IOCPUSleepKernel.
+                boot_args = merge_kernel_args(boot_args, ['armcpu-edge=1'])
+            if not native_usb and not any(arg.startswith('enable-acsleep=') for arg in tokens):
+                # RootStage serves USB on its own CPU while XNU is in standby.
+                # Use powerd's USB-only exception for that firmware session.
+                boot_args = merge_kernel_args(boot_args, ['enable-acsleep=1'])
     except ValueError as error:
         parser.error(str(error))
     mailbox[128:128 + len(boot_args)] = boot_args.encode()
@@ -301,16 +374,20 @@ def main():
         shutil.copyfile(template / 'stage/EFI/UniXNU/Payloads' / name, payloads / name)
     shutil.copyfile(addon, payloads / 'kernel.macho.gpuaddon')
     # Preserve each original trust module and append the owner-built GPU module.
-    original_trust = (payloads / 'kernel.macho.trustcache').read_bytes()
+    trust_path = payloads / 'kernel.macho.trustcache'
+    original_trust = trust_path.read_bytes()
     count, = struct.unpack_from('<I', original_trust)
     offsets = struct.unpack_from(f'<{count}I', original_trust, 4)
     modules = [original_trust[start:end] for start, end in zip(offsets, (*offsets[1:], len(original_trust)))]
-    owner = root / 'gpu/owner.trustcache'
-    owner_bytes = owner.read_bytes()
-    if hashlib.sha256(owner_bytes).hexdigest() != gpu['trust_cache_sha256']:
-        raise ValueError('GPU owner trust module differs from the userspace build')
-    if owner_bytes not in modules:
-        modules.append(owner_bytes)
+    if inherit_addon:
+        if not any(hashlib.sha256(module).hexdigest() == gpu['trust_cache_sha256'] for module in modules):
+            raise ValueError('Baseline is missing its GPU owner trust module')
+    else:
+        owner_bytes = (root / 'gpu/owner.trustcache').read_bytes()
+        if hashlib.sha256(owner_bytes).hexdigest() != gpu['trust_cache_sha256']:
+            raise ValueError('GPU owner trust module differs from the userspace build')
+        if owner_bytes not in modules:
+            modules.append(owner_bytes)
     if appsync:
         hashes = sorted({bytes.fromhex(record['cdhash']) for record in appsync['files'].values()})
         module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
@@ -328,15 +405,30 @@ def main():
         module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
         if module not in modules:
             modules.append(module)
+    if bluetooth_runtime:
+        hashes = sorted({bytes.fromhex(value) for value in bluetooth_runtime['cdhashes']})
+        expected_hashes = 3 if bluetooth_runtime.get('daemon_input_sha256') else 2
+        if len(hashes) != expected_hashes or any(len(value) != 20 for value in hashes):
+            raise ValueError('Unexpected Bluetooth runtime signature hashes')
+        module = struct.pack('<I16sI', 2, hashlib.sha256(b''.join(hashes)).digest()[:16], len(hashes))
+        module += b''.join(value + bytes([2, 0, 0, 0]) for value in hashes)
+        if module not in modules:
+            modules.append(module)
     cursor = 4 + 4 * len(modules)
     offsets = []
     for module in modules:
         offsets.append(cursor)
         cursor += len(module)
-    (payloads / 'kernel.macho.trustcache').write_bytes(
+    trust_path.write_bytes(
         struct.pack(f'<{1 + len(modules)}I', len(modules), *offsets) + b''.join(modules))
     adt = payloads / 'kernel.macho.adt'
     tree, _ = read_adt(adt.read_bytes())
+    defaults = next((node for node in tree[1] if node[0].get('name') == b'defaults\0'), None)
+    if defaults is None:
+        defaults = ({'name': b'defaults\0'}, [])
+        tree[1].append(defaults)
+    retained_sleep = 'marble-sleep=1' in boot_args.split()
+    defaults[0]['sleep-disabled'] = struct.pack('<I', 0 if retained_sleep else 1)
     if haptics_runtime:
         product = next((node for node in tree[1] if node[0].get('name') == b'product\0'), None)
         if product is None:
@@ -443,7 +535,7 @@ def main():
             system_source='ufs', exit_boot_services=False,
             resident_usb=not native_usb, runtime_usb_mode=1 if native_usb else 3,
             usb_owner=args.usb_owner, enabled_cpu_affinities=cpu_regs,
-            rootstage_hold=args.hold_rootstage,
+            rootstage_hold=args.hold_rootstage, retained_sleep=retained_sleep,
             firmware_usb_affinity=None if native_usb else USB_AFFINITY, display_scale=args.display_scale, ui_identity=identity,
             data_logical_bytes=metadata['logical_bytes'], data_uuid=metadata['volume_uuid'],
             storage_profile_sha256=hashlib.sha256(args.storage_profile.read_bytes()).hexdigest(),
@@ -457,12 +549,19 @@ def main():
             bluetooth_firmware_manifest_sha256=(hashlib.sha256(manifest.read_bytes()).hexdigest()
                                                 if bluetooth_firmware else None),
             wifi_runtime=str(args.wifi_runtime.resolve()) if wifi_runtime else None,
+            bluetooth_runtime=str(args.bluetooth_runtime.resolve()) if bluetooth_runtime else None,
             haptics_runtime=str(args.haptics_runtime.resolve()) if haptics_runtime else None,
             appsync_build=appsync['build'] if appsync else None), indent=2) + '\n')
     if candidate:
         data = json.loads(report.read_text())
         data['baseline_candidate'] = args.baseline.name
         data['baseline_kernel_sha256'] = candidate['kernel_sha256']
+        if inherit_addon:
+            for key in ('appsync_runtime', 'appsync_build', 'wifi_firmware', 'wifi_runtime',
+                        'haptics_runtime', 'bluetooth_firmware_manifest_sha256'):
+                data[key] = candidate.get(key)
+            if not bluetooth_runtime:
+                data['bluetooth_runtime'] = candidate.get('bluetooth_runtime')
         report.write_text(json.dumps(data, indent=2) + '\n')
     print(boot)
 

@@ -6,6 +6,12 @@
 #define MARBLE_USB_HEARTBEAT_TAG UINT32_C(0x80000001)
 #define MARBLE_USB_HEARTBEAT_MASK UINT32_C(0x80000001)
 #define MARBLE_USB_STALL_SECONDS 30
+/* Negotiated in the reserved bytes of the resident transport's two cache lines.
+ * The host byte lies in the PHY calibration area only in native USB mode. */
+#define MARBLE_USB_DOORBELL_TAG 0xd1u
+#define MARBLE_USB_HOST_DOORBELL 51u
+#define MARBLE_USB_KERNEL_DOORBELL 0u
+#define MARBLE_USB_DOORBELL_SGI 1u
 
 struct MarbleUsbHealth {
     uint32_t last;

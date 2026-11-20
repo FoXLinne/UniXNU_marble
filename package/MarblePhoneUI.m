@@ -4,12 +4,15 @@
 #include <CoreGraphics/CGGeometry.h>
 #include <dispatch/dispatch.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <mach-o/dyld.h>
+#include <math.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <sys/stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "MarbleScreenGeometry.h"
@@ -327,9 +330,146 @@ static void installPhotoRendering(void)
     __atomic_store_n(&photoInstallState, 2u, __ATOMIC_RELEASE);
 }
 
+static IMP originalSegmentationSave;
+
+static BOOL segmentationFileExistsError(NSError *error)
+{
+    for (unsigned depth = 0; error && depth < 8; ++depth) {
+        if (([error.domain isEqualToString:NSCocoaErrorDomain] && error.code == NSFileWriteFileExistsError) ||
+            ([error.domain isEqualToString:NSPOSIXErrorDomain] && error.code == EEXIST)) return YES;
+        id underlying = error.userInfo[NSUnderlyingErrorKey];
+        error = [underlying isKindOfClass:[NSError class]] ? underlying : nil;
+    }
+    return NO;
+}
+
+static void updateSegmentationURL(id object, const char *getter, const char *setter,
+                                  NSURL *temporary, NSURL *replacement)
+{
+    SEL read = sel_registerName(getter), write = sel_registerName(setter);
+    if (!signature(class_getInstanceMethod(object_getClass(object), read), '@', 0, "") ||
+        !signature(class_getInstanceMethod(object_getClass(object), write), 'v', 1, "@")) return;
+    if ([((id (*)(id, SEL))objc_msgSend)(object, read) isEqual:temporary])
+        ((void (*)(id, SEL, id))objc_msgSend)(object, write, replacement);
+}
+
+static BOOL saveSegmentationDirectory(id self, SEL selector, NSURL *destination, NSError **error)
+{
+    BOOL (*save)(id, SEL, NSURL *, NSError **) = (void *)originalSegmentationSave;
+    if (!destination.isFileURL || ![destination.lastPathComponent isEqualToString:@"input.segmentation"])
+        return save(self, selector, destination, error);
+
+    @synchronized (self) {
+        NSError *failure = nil;
+        if (save(self, selector, destination, &failure)) return YES;
+        if (!segmentationFileExistsError(failure)) {
+            if (error) *error = failure;
+            return NO;
+        }
+
+        NSURL *temporary = [destination.URLByDeletingLastPathComponent URLByAppendingPathComponent:
+            [NSString stringWithFormat:@".marble-%@.segmentation", NSUUID.UUID.UUIDString] isDirectory:YES];
+        id resource = [photoObject(self, "resource") retain];
+        NSURL *oldAsset = [photoObject(resource, "archiveURL") retain];
+        NSURL *oldData = [photoObject(self, "segmentationDataURL") retain];
+        // A retry can use the same draft directory. Save a complete replacement
+        // before swapping it into place so a failed retry preserves the draft.
+        BOOL saved = save(self, selector, temporary, &failure);
+        if (saved && renamex_np(temporary.fileSystemRepresentation, destination.fileSystemRepresentation, RENAME_SWAP) != 0) {
+            failure = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+            saved = NO;
+        }
+        updateSegmentationURL(resource, "archiveURL", "setArchiveURL:",
+            [temporary URLByAppendingPathComponent:@"asset.resource"],
+            saved ? [destination URLByAppendingPathComponent:@"asset.resource"] : oldAsset);
+        updateSegmentationURL(self, "segmentationDataURL", "setSegmentationDataURL:",
+            [temporary URLByAppendingPathComponent:@"segmentation.data.aar"],
+            saved ? [destination URLByAppendingPathComponent:@"segmentation.data.aar"] : oldData);
+        [oldAsset release];
+        [oldData release];
+        [resource release];
+        [[NSFileManager defaultManager] removeItemAtURL:temporary error:NULL];
+        if (!saved && error) *error = failure;
+        return saved;
+    }
+}
+
+static void installSegmentationSave(void)
+{
+    if (originalSegmentationSave || strcmp(getprogname(), "PhotosPosterProvider")) return;
+    Class cls = objc_lookUpClass("PIParallaxSegmentationItem");
+    Method method = class_getInstanceMethod(cls, sel_registerName("saveToURL:error:"));
+    if (signature(method, 'B', 2, "@^") &&
+        signature(class_getInstanceMethod(cls, sel_registerName("segmentationDataURL")), '@', 0, "") &&
+        signature(class_getInstanceMethod(cls, sel_registerName("resource")), '@', 0, ""))
+        originalSegmentationSave = method_setImplementation(method, (IMP)saveSegmentationDirectory);
+}
+
+// The iOS 18 slider statistics read a brightness dictionary. The legacy
+// display module can return the physical brightness as a scalar instead.
+typedef struct {
+    bool darkThemeApplied;
+    bool landscapeOrientation;
+    bool autobrightnessEnabled;
+    bool ecoModeEnabled;
+} MarbleSliderTrackedState;
+
+static IMP originalSliderFillEntry;
+static IMP originalSliderCopyProperty;
+static _Thread_local unsigned sliderTelemetryDepth;
+
+static id copySliderDisplayProperty(id self, SEL selector, NSString *key)
+{
+    id property = ((id (*)(id, SEL, NSString *))originalSliderCopyProperty)(self, selector, key);
+    if (!sliderTelemetryDepth || ![key isEqualToString:@"DisplayBrightness"] ||
+        ![property isKindOfClass:[NSNumber class]]) return property;
+    float nits = [property floatValue];
+    [property release];
+    return [[NSDictionary alloc] initWithObjectsAndKeys:@(isfinite(nits) && nits >= 0 ? nits : 0),
+        @"NitsPhysical", nil];
+}
+
+static void fillSliderEntry(id self, SEL selector, void *entry, int64_t timestamp,
+                            float slider, float apce, MarbleSliderTrackedState state)
+{
+    ++sliderTelemetryDepth;
+    @try {
+        ((void (*)(id, SEL, void *, int64_t, float, float, MarbleSliderTrackedState))originalSliderFillEntry)(
+            self, selector, entry, timestamp, slider, apce, state);
+    } @finally {
+        --sliderTelemetryDepth;
+    }
+}
+
+static void installLegacySliderTelemetry(void)
+{
+    if (strcmp(getprogname(), "backboardd")) return;
+    Class telemetry = objc_lookUpClass("CBSliderCommitTelemetry");
+    Class container = objc_lookUpClass("CBDisplayContaineriOS");
+    Method fill = class_getInstanceMethod(telemetry,
+        sel_registerName("fillEntry:withTimestamp:slider:apce:andTrackedState:"));
+    Method copy = class_getInstanceMethod(container, sel_registerName("copyPropertyForKey:"));
+    if (!signature(fill, 'v', 5, "^qff{") || !signature(copy, '@', 1, "@")) return;
+    char *type = method_copyArgumentType(fill, 6);
+    NSUInteger size = 0, alignment = 0;
+    bool trackedState = type && !strncmp(type, "{TrackedState=", 14);
+    if (trackedState) NSGetSizeAndAlignment(type, &size, &alignment);
+    free(type);
+    if (!trackedState || size != sizeof(MarbleSliderTrackedState) ||
+        alignment != _Alignof(MarbleSliderTrackedState)) return;
+    static bool installing;
+    if (__atomic_exchange_n(&installing, true, __ATOMIC_ACQ_REL)) return;
+    originalSliderCopyProperty = method_getImplementation(copy);
+    method_setImplementation(copy, (IMP)copySliderDisplayProperty);
+    originalSliderFillEntry = method_getImplementation(fill);
+    method_setImplementation(fill, (IMP)fillSliderEntry);
+}
+
 static void install(void *context)
 {
     (void)context;
+    installLegacySliderTelemetry();
+    installSegmentationSave();
     installWallpaperColor();
     installPhotoRendering();
     installComposition();
@@ -349,7 +489,9 @@ static void install(void *context)
 static void imageAdded(const struct mach_header *header, intptr_t slide)
 {
     (void)header; (void)slide;
+    installLegacySliderTelemetry();
     installNativeScreen();
+    installSegmentationSave();
     installWallpaperColor();
     installPhotoRendering();
     installComposition();

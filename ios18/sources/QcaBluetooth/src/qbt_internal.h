@@ -41,6 +41,9 @@ struct qbt {
     uint8_t event[258]; unsigned event_length;
     bool drop;
     uint8_t forward[QBT_CHUNK]; unsigned forward_length, forward_offset;
+    uint8_t page_timeout_peer[6];
+    uint64_t page_timeout_until;
+    bool scan_params_pending, scan_pending_active, scan_active;
 };
 int qbt_command(struct qbt *, uint16_t, const void *, unsigned, uint8_t,
                 uint8_t *, size_t *);

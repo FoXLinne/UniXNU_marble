@@ -16,6 +16,11 @@ static constexpr unsigned kInputReportType = 0;
 #include <libkern/c++/OSArray.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IODeviceTreeSupport.h>
+#ifdef MARBLE_IOS18_GPU
+#include <IOKit/pwr_mgt/RootDomain.h>
+#include "MarbleDisplayEvents.h"
+#include "MarbleDisplayFeatures.h"
+#endif
 #include <kern/clock.h>
 #include "MarbleButtonReports.h"
 #include "MarbleInputLatency.h"
@@ -24,6 +29,13 @@ extern "C" void native_hid_live_checkpoint(IOService *);
 extern "C" bool native_hid_input_requested(void);
 extern "C" void native_buttons_set_sink(void (*)(void *, uint32_t), void *);
 extern "C" { volatile uint32_t marble_buttons_hid_stats[8]; }
+#ifdef MARBLE_IOS18_GPU
+extern "C" volatile uint32_t marble_backlight_stats[8];
+static bool marbleDisplayIsBlank() {
+    return __atomic_load_n(&marble_backlight_stats[0], __ATOMIC_ACQUIRE) == 3 &&
+           !__atomic_load_n(&marble_backlight_stats[7], __ATOMIC_ACQUIRE);
+}
+#endif
 
 // The iOS 18 board personality matches Consumer Control. Publish that usage
 // as the application collection so backboardd classifies the built-in switches
@@ -256,6 +268,67 @@ class NativeHomeInput : public IOHIDDevice {
         if (self->timer) self->timer->setTimeoutUS(1);
         IOLockUnlock(self->queueLock);
     }
+#ifdef MARBLE_IOS18_GPU
+    static constexpr uint32_t powerKey = 1u << 1;
+    uint32_t rawButtons = 0;
+    uint64_t wakePressedAt = 0, wakeHoldDeadline = 0;
+    IOTimerEventSource *wakeTimer = nullptr;
+
+    void requestDisplayWake(const char *reason) {
+        if (auto *root = IOService::getPMRootDomain()) root->requestUserActive(this, reason);
+        messageClients(kMarbleDisplayWakeMessage);
+    }
+    IOReturn forwardHeldPower() {
+        const IOReturn result = report(rawButtons, wakePressedAt);
+        if (!result) {
+            wakeHoldDeadline = 0;
+            wakeTimer->cancelTimeout();
+        }
+        return result;
+    }
+    static void wakeHoldExpired(OSObject *owner, IOTimerEventSource *source) {
+        auto *self = static_cast<NativeHomeInput *>(owner);
+        // Process a queued release by its original timestamp before promoting a hold.
+        if (self->flush()) {
+            source->setTimeoutMS(25);
+            return;
+        }
+        if (!self->wakeHoldDeadline) return;
+        if (mach_absolute_time() < self->wakeHoldDeadline) source->wakeAtTime(self->wakeHoldDeadline);
+        else if (self->forwardHeldPower()) source->setTimeoutMS(25);
+    }
+    IOReturn deliverButtons(uint32_t mask, uint64_t timestamp) {
+        const bool pressed = (mask & powerKey) && !(rawButtons & powerKey);
+        const bool blank = marbleDisplayIsBlank();
+        const uint32_t action = marble_display_wake_action(
+            blank, pressed, !(mask & powerKey), mask & ~powerKey,
+            wakeHoldDeadline != 0, wakeHoldDeadline && timestamp >= wakeHoldDeadline);
+        if (action == MARBLE_DISPLAY_WAKE_ARM_HOLD) {
+            uint64_t holdInterval;
+            clock_interval_to_absolutetime_interval(350, kMillisecondScale, &holdInterval);
+            wakePressedAt = timestamp;
+            wakeHoldDeadline = timestamp + holdInterval;
+            rawButtons = mask;
+            wakeTimer->wakeAtTime(wakeHoldDeadline);
+            return kIOReturnSuccess;
+        }
+        if (wakeHoldDeadline && action == MARBLE_DISPLAY_WAKE_FORWARD) {
+            const IOReturn result = forwardHeldPower();
+            if (result) return result;
+        } else if (wakeHoldDeadline && action == MARBLE_DISPLAY_WAKE_DISPLAY) {
+            wakeHoldDeadline = 0;
+            wakeTimer->cancelTimeout();
+            rawButtons = mask;
+            // A short tap from blank belongs to the lock-screen wake path.
+            // Sending its HID release as well can immediately relock it.
+            requestDisplayWake("SideButton");
+            return kIOReturnSuccess;
+        }
+        const IOReturn result = report(mask, timestamp);
+        if (!result) rawButtons = mask;
+        return result;
+    }
+#endif
     IOReturn report(uint32_t mask, uint64_t timestamp) {
         const uint8_t bytes[] = {2, uint8_t(mask)};
         reportBuffer->writeBytes(0, bytes, sizeof(bytes));
@@ -290,7 +363,11 @@ class NativeHomeInput : public IOHIDDevice {
             MarbleButtonReport *next = reports.head;
             IOLockUnlock(queueLock);
             if (!next) return kIOReturnSuccess;
+#ifdef MARBLE_IOS18_GPU
+            IOReturn result = deliverButtons(next->mask, next->timestamp);
+#else
             IOReturn result = report(next->mask, next->timestamp);
+#endif
             if (result) return result;
             IOLockLock(queueLock);
             reports.completed(); marble_buttons_hid_stats[6] = reports.count;
@@ -315,6 +392,10 @@ class NativeHomeInput : public IOHIDDevice {
     static IOReturn releaseReports(OSObject *owner, void *, void *, void *, void *) {
         auto *self = static_cast<NativeHomeInput *>(owner);
         self->flush();
+#ifdef MARBLE_IOS18_GPU
+        self->wakeHoldDeadline = 0;
+        if (self->wakeTimer) self->wakeTimer->cancelTimeout();
+#endif
         return self->report(0, mach_absolute_time());
     }
     void discardReports() {
@@ -323,6 +404,7 @@ class NativeHomeInput : public IOHIDDevice {
 
 public:
 #ifdef MARBLE_IOS18_GPU
+    void wakeFromTouch() { requestDisplayWake("TouchTap"); }
     void typeKey(unsigned usage, unsigned modifiers) {
         if (usage < 4 || usage > 0x65 || modifiers > 0xff) return;
         const uint8_t pressed[9] = {1, uint8_t(modifiers), 0, uint8_t(usage)};
@@ -346,6 +428,9 @@ public:
     bool start(IOService *provider) override {
         inputLoop = IOWorkLoop::workLoop();
         queueLock = IOLockAlloc();
+#ifdef MARBLE_IOS18_GPU
+        setName(kMarbleSideButtonServiceName);
+#endif
         const uint8_t released[] = {2, 0};
         reportBuffer = IOBufferMemoryDescriptor::withBytes(released, sizeof(released), kIODirectionNone);
         if (!inputLoop || !queueLock || !reportBuffer || !setProperty("Built-In", true) ||
@@ -354,6 +439,16 @@ public:
         if (!timer || inputLoop->addEventSource(timer) != kIOReturnSuccess) {
             OSSafeReleaseNULL(timer); IOHIDDevice::stop(provider); return false;
         }
+#ifdef MARBLE_IOS18_GPU
+        wakeTimer = IOTimerEventSource::timerEventSource(this, wakeHoldExpired);
+        if (!wakeTimer || inputLoop->addEventSource(wakeTimer) != kIOReturnSuccess) {
+            OSSafeReleaseNULL(wakeTimer);
+            inputLoop->removeEventSource(timer);
+            OSSafeReleaseNULL(timer);
+            IOHIDDevice::stop(provider);
+            return false;
+        }
+#endif
         active = true;
         native_buttons_set_sink(buttonsChanged, this);
         native_hid_input_observed(2,0); return true;
@@ -364,6 +459,12 @@ public:
         if (timer) timer->cancelTimeout();
         if (inputLoop && reportBuffer && queueLock) inputLoop->runAction(releaseReports, this);
         if (timer) { inputLoop->removeEventSource(timer); OSSafeReleaseNULL(timer); }
+#ifdef MARBLE_IOS18_GPU
+        if (wakeTimer) {
+            inputLoop->removeEventSource(wakeTimer);
+            OSSafeReleaseNULL(wakeTimer);
+        }
+#endif
         IOHIDDevice::stop(provider);
     }
     void free() override {
@@ -385,7 +486,7 @@ extern "C" IOService *native_hid_input_allocate(void) { return new NativeHomeInp
 
 #define TOUCH_FINGER \
     0x09,0x22,0xa1,0x02,0x09,0x42,0x15,0x00,0x25,0x01,0x75,0x01,0x95,0x01,0x81,0x02, \
-    0x09,0x47,0x81,0x02,0x75,0x06,0x95,0x01,0x81,0x03, \
+    0x09,0x47,0x81,0x02,0x09,0x32,0x81,0x02,0x75,0x05,0x95,0x01,0x81,0x03, \
     0x09,0x51,0x75,0x08,0x95,0x01,0x15,0x00,0x26,0xff,0x00,0x81,0x02, \
     0x05,0x01,0x09,0x30,0x15,0x00,0x26,0xff,0x7f,0x75,0x10,0x95,0x01,0x81,0x02, \
     0x09,0x31,0x81,0x02,0x05,0x0d,0xc0,
@@ -397,19 +498,45 @@ static const uint8_t touchDescriptor[] = {
 };
 #undef TOUCH_FINGER
 
+extern "C" { volatile uint64_t native_touch_idle_clears[2]; }
+#ifdef MARBLE_IOS18_GPU
+extern "C" { volatile uint64_t native_touch_wake_requests; }
+#endif
+
 class NativeMarbleTouchInput : public IOHIDDevice {
     OSDeclareDefaultStructors(NativeMarbleTouchInput)
     IOWorkLoop *inputLoop = nullptr;
     IOTimerEventSource *tapTimer = nullptr;
     bool eventDriverMatched = false;
     uint8_t previous[10][6] = {};
+#ifdef MARBLE_IOS18_GPU
+    MarbleBlankTap blankTap = {};
+    uint64_t tapDuration = 0;
+#endif
     static void releaseTap(OSObject *owner, IOTimerEventSource *) {
         static_cast<NativeMarbleTouchInput *>(owner)->publish(0, nullptr);
     }
-    static IOReturn send(OSObject *owner, void *countValue, void *pointsValue, void *, void *) {
+    static IOReturn send(OSObject *owner, void *countValue, void *pointsValue, void *cancelled, void *) {
         auto *self = static_cast<NativeMarbleTouchInput *>(owner);
         unsigned count = reinterpret_cast<uintptr_t>(countValue);
         auto *points = static_cast<const uint8_t *>(pointsValue);
+#ifdef MARBLE_IOS18_GPU
+        if (homeInput && (self->blankTap.tracking || (count && marbleDisplayIsBlank()))) {
+            bool priorContact = false;
+            for (const auto &finger : self->previous) priorContact |= finger[0] == 3;
+            const unsigned x = count ? points[2] | unsigned(points[3]) << 8 : 0;
+            const unsigned y = count ? points[4] | unsigned(points[5]) << 8 : 0;
+            const uint32_t action = marble_blank_tap_update(&self->blankTap, marbleDisplayIsBlank(),
+                priorContact, count, x, y, mach_absolute_time(), self->tapDuration, cancelled != nullptr);
+            if (action == MARBLE_BLANK_TAP_WAKE) {
+                ++native_touch_wake_requests;
+                homeInput->wakeFromTouch();
+            }
+            if (action != MARBLE_BLANK_TAP_FORWARD) return kIOReturnSuccess;
+        }
+#else
+        (void)cancelled;
+#endif
         uint8_t report[62] = {3}, seen[10][6] = {}, next[10][6];
         memcpy(next, self->previous, sizeof(next));
         // Unused transducers must not share the state of contact 0.
@@ -430,7 +557,7 @@ class NativeMarbleTouchInput : public IOHIDDevice {
         for (unsigned id = 0; id < 10; ++id) {
             if (seen[id][0]) {
                 uint8_t *finger = report + 1 + 6 * slots++;
-                finger[0] = 3; finger[1] = id;
+                finger[0] = 7; finger[1] = id; // Tip Switch, Confidence and In Range.
                 memcpy(finger + 2, seen[id] + 2, 4);
                 next[id][0] = 3;
                 memcpy(next[id] + 2, seen[id] + 2, 4);
@@ -450,6 +577,16 @@ class NativeMarbleTouchInput : public IOHIDDevice {
         if(count)native_marble_input_hid_begin();
         IOReturn result = buffer ? self->handleReport(buffer, kInputReportType, 0) : kIOReturnNoMemory;
         if(count)native_marble_input_hid_end(uint32_t(result));
+        if (!result && !count) {
+            // The lift report identifies each released finger. An empty
+            // collection report then clears native idle tracking.
+            uint8_t empty[62]={3};
+            for (unsigned slot=0;slot<10;++slot) empty[2+6*slot]=240+slot;
+            auto *ended=IOBufferMemoryDescriptor::withBytes(empty,sizeof(empty),kIODirectionNone);
+            result=ended?self->handleReport(ended,kInputReportType,0):kIOReturnNoMemory;
+            OSSafeReleaseNULL(ended);
+            ++native_touch_idle_clears[result?1:0];
+        }
         if(!result)memcpy(self->previous,next,sizeof(next));
         OSSafeReleaseNULL(buffer);
         native_hid_input_observed(6, result);
@@ -465,6 +602,9 @@ public:
     }
     bool start(IOService *provider) override {
         inputLoop = IOWorkLoop::workLoop();
+#ifdef MARBLE_IOS18_GPU
+        clock_interval_to_absolutetime_interval(350, kMillisecondScale, &tapDuration);
+#endif
         IORegistryEntry *chosen=IORegistryEntry::fromPath("/chosen",gIODTPlane);
         if(chosen) {
             const char *keys[]={"canvas-width","canvas-height"};
@@ -485,7 +625,7 @@ public:
         tapTimer = IOTimerEventSource::timerEventSource(this, releaseTap);
         return tapTimer && inputLoop->addEventSource(tapTimer) == kIOReturnSuccess;
     }
-    void publish(unsigned count, const uint8_t *points) {
+    void publish(unsigned count, const uint8_t *points, bool cancel = false) {
         if (!eventDriverMatched) {
             if (auto *driver = findEventDriver(this, 4)) {
                 // backboardd classifies the event service and its interface, rather than the HID device.
@@ -502,7 +642,8 @@ public:
             }
         }
         native_hid_input_observed(7, eventDriverMatched);
-        inputLoop->runAction(send, this, reinterpret_cast<void *>(uintptr_t(count)), const_cast<uint8_t *>(points));
+        inputLoop->runAction(send, this, reinterpret_cast<void *>(uintptr_t(count)),
+                           const_cast<uint8_t *>(points), reinterpret_cast<void *>(uintptr_t(cancel)));
     }
     void tap(unsigned x, unsigned y) {
         IOLog("MarbleTouch: synthetic tap x=%u y=%u\n", x, y);
@@ -530,6 +671,9 @@ extern "C" IOService *native_hid_touch_allocate(void) {
 extern "C" void native_touch_publish(unsigned count, const uint8_t *points) {
     if (!touchInput) return;
     touchInput->publish(count, points);
+}
+extern "C" void native_touch_cancel(void) {
+    if (touchInput) touchInput->publish(0, nullptr, true);
 }
 extern "C" void native_hid_request_tap(unsigned x, unsigned y) {
     if (touchInput && x < 1080 && y < 2400) touchInput->tap(x, y);

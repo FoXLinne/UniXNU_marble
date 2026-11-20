@@ -1335,6 +1335,13 @@
       "evidence": "Checks initialized power management flag +0x68, returns PM state currentPowerState +0x160 via +0x60 or zero. Source: iokit/Kernel/IOServicePM.cpp."
     },
     {
+      "original": "0xfffffff0085aa5dc",
+      "original_size": 20,
+      "original_sha256": "1b2dc612840201d51343b6ba94086a7151dda6c015b38932de8b5ee3d65acaa7",
+      "native_symbol": "_IOPMRootDomainGetWillShutdown",
+      "evidence": "Identical predicate after BTI and address relocation. Loads the 32-bit gWillShutdown state and returns whether it is nonzero. Source: iokit/Kernel/IOPMrootDomain.cpp."
+    },
+    {
       "original": "0xfffffff0085aa638",
       "original_size": 72,
       "original_sha256": "03057997ae66dabf23417ac9bfb08f5095d652f0bac64365995fa4fbb078e1c4",

@@ -12,6 +12,10 @@
 #include "../NativeBridgeMetalFrontend.h"
 extern "C" size_t native_bridge_metal_telemetry(char *, size_t);
 
+@protocol ExternKernelLibrary
+- (id<MTLFunction>)newExternFunctionWithName:(NSString *)name;
+@end
+
 static void onMissing(const char *cls, const char *sel) {std::fprintf(stderr, "missing selector: %s %s\n", cls, sel);}
 
 int main(int argc, char **argv) {
@@ -32,6 +36,8 @@ int main(int argc, char **argv) {
             // Apple's Metal answers 228 for macOS 26.5.1's ci_stdlib).
             NSArray *externs = [(id)kernels respondsToSelector:@selector(externFunctionNames)] ? [(id)kernels performSelector:@selector(externFunctionNames)] : nil;
             std::printf("EXTERNS %lu\n", (unsigned long)[externs count]);
+            id<MTLFunction> external = [(id<ExternKernelLibrary>)kernels newExternFunctionWithName:@"_add"];
+            if (external.functionType != 4) {std::printf("FAIL extern kernel lookup\n"); return 1;}
             if (![externs containsObject:@"_add"]) {std::printf("FAIL extern function names\n"); return 1;}
             // As Apple's Metal answers (macOS 26.5.1): no names, the kernel by name, function type 4.
             if (kernels.functionNames.count || add.functionType != 4) {std::printf("FAIL kernel library answers\n"); return 1;}

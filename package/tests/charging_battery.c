@@ -7,7 +7,7 @@
 static uint32_t get(const uint8_t *p) {return p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24;}
 static void put(uint8_t *p,uint32_t v) {for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(v>>(8*i));}
 static int32_t battery[22]={1,1,1,3,7300,100,4000000,4010000,4460000,-448000,2000000,16,2000000,3840,2,3022,419,5000000,4140000,0,600,65535};
-static int32_t usb[8]={1,5090000,5000000,503000,500000,100000,1,1};
+static int32_t usb[13]={1,5090000,5000000,503000,500000,100000,1,1,[12]=1};
 static unsigned writes;
 static void cycle(MarbleBattmgr *b) {
     uint8_t q[24],r[24];
@@ -18,7 +18,7 @@ static void cycle(MarbleBattmgr *b) {
         unsigned opcode=get(q+8),property=get(q+16);
         memcpy(r,q,12);put(r+12,property);put(r+20,0);
         if(opcode==0x30) {assert(property<22);put(r+16,(uint32_t)battery[property]);}
-        else if(opcode==0x32) {assert(property<8);put(r+16,(uint32_t)usb[property]);}
+        else if(opcode==0x32) {assert(property<8 || property==12);put(r+16,(uint32_t)usb[property]);}
         else {assert(opcode==0x33 && property==5);assert(usb[0]);usb[5]=(int32_t)get(q+20);writes++;put(r+16,0);}
         assert(marble_battmgr_receive(b,r,24)!=BmIgnored);
     }

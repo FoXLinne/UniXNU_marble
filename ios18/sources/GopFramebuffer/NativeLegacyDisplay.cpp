@@ -39,6 +39,7 @@ extern "C" void native_legacy_swap_validation_observed(bool,unsigned,const void 
 extern "C" void native_legacy_surface_rejected(uint64_t,uint64_t,uint32_t,uint32_t,uint64_t,uint64_t,uint64_t);
 extern "C" bool native_legacy_prepare_scanout(void);
 extern "C" IOReturn native_legacy_panel_power(unsigned long) __attribute__((weak_import));
+extern "C" bool native_marble_backlight_owns_panel(void) __attribute__((weak_import));
 extern "C" void native_legacy_transfer_observed(IOReturn,const void *,uint64_t);
 extern "C" void native_legacy_copy_timing_observed(uint64_t ticks,uint64_t bytes);
 extern "C" void native_legacy_retirement_observed(IOService *);
@@ -56,6 +57,8 @@ extern "C" {volatile uint32_t native_legacy_surfaces[14];}
 // [9] swaps held back until the GPU had written the frame (the compositor submits the swap when the command buffer is scheduled), [10] total
 // and [11] longest wait (us), [12] waits that reached 250 ms, [13] waits of 8 ms or more (longer than a refresh at 120 Hz: the frame missed a flip).
 extern "C" {volatile uint32_t native_legacy_direct[14];}
+// Number of owner-idle swaps accepted after the submission grace window.
+extern "C" {volatile uint32_t native_legacy_owner_idle_swaps;}
 extern "C" bool native_adreno_fences(uint32_t *submitted,uint32_t *retired) __attribute__((weak_import));
 extern "C" bool native_adreno_fences_detail(uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
 extern "C" bool native_adreno_owner_fences(int32_t,uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
@@ -73,6 +76,9 @@ extern "C" volatile uint32_t native_ufs_dpu_state __attribute__((weak_import));
 extern "C" void native_marble_input_swap_presented(const void *) __attribute__((weak_import));
 extern "C" void native_marble_input_swap_cancelled(void) __attribute__((weak_import));
 extern "C" bool native_gop_direct_config(uint32_t *,uint32_t *,uint32_t *,uint32_t *,uint32_t *,uint32_t *) __attribute__((weak_import));
+extern "C" bool native_gop_direct_scale(uint32_t, uint32_t) __attribute__((weak_import));
+extern "C" bool native_gop_direct_scale_supported(uint32_t, uint32_t) __attribute__((weak_import));
+extern "C" { volatile uint64_t native_legacy_scaled_latches; }
 static void noteSurface(OSObject *surface,IOMemoryDescriptor *memory)
 {
     static OSObject *seen[4];
@@ -204,9 +210,9 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
                 native_legacy_surface_height(surface),native_legacy_surface_stride(surface),native_legacy_surface_format(surface),
                 native_legacy_surface_allocation(surface),memory?memory->getLength():0);
         }
+        if(!native_legacy_ring_cap)return;
         uint32_t submitted=0,retired=0;uint32_t outstanding=0;
         if(&native_adreno_fences && native_adreno_fences(&submitted,&retired)){const int32_t d=int32_t(submitted-retired);outstanding=d>0?(d>255?255:uint32_t(d)):0;}
-        if(!native_legacy_ring_cap)return;
         const uint32_t n=native_legacy_ring_count;volatile uint64_t *at=native_legacy_ring[n&(native_legacy_ring_cap-1)];
         at[0]=nowUs();
         at[1]=uint64_t(event)<<56|uint64_t(slot+1)<<48|uint64_t(validatedCount()&255)<<40|uint64_t(outstanding)<<24|((uintptr_t(request)>>4)&0xffffff);
@@ -242,7 +248,8 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
         validatedOwners[slot]=proc_selfpid();validatedFences[slot]=0;
         uint32_t retired=0;
         validatedFenceCaptured[slot]=validatedOwners[slot]>0 && &native_adreno_owner_fences &&
-            native_adreno_owner_fences(validatedOwners[slot],&validatedFences[slot],&retired,nullptr);
+            native_adreno_owner_fences(validatedOwners[slot],&validatedFences[slot],&retired,nullptr) &&
+            validatedFences[slot]!=0;
     }
     const OriginalLegacySwapRequest *gpuRequest=nullptr;
     uint64_t gpuTraceRequest=0;
@@ -284,7 +291,9 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     uint64_t fenceSince=0;
     bool fenceCaptured=false,fenceSlow=false;
     IOTimerEventSource *fenceTimer=nullptr;
-    bool directOn=false,directBoot=true;
+    bool directOn=false,directBoot=true,directScale=false;
+    struct ScaledSize { uint32_t width, height; };
+    ScaledSize shownSize, pendingSize;
     static constexpr uint32_t kCtlFlush=0x15018;
     uint32_t directPipes[8]={0x4000,0x6000},directOffsets[8]={};
     uint32_t directMask=3,directFlush=3,bootIova=0xb8000000U,bootStride=0x2fa0;
@@ -306,7 +315,9 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
             return;
         }
         mdp=reinterpret_cast<volatile uint32_t *>(mdpMap->getVirtualAddress());
-        directOn=true;gDirectDisplay=this;
+        directOn=true;
+        directScale=mode>=3 && &native_gop_direct_scale && &native_gop_direct_scale_supported;
+        gDirectDisplay=this;
     }
     // The diagnostic screenshot reads the boot memory, which the display no longer scans: draw the surface on screen into it (rows of the
     // visible width) so the picture shows what the panel shows.
@@ -317,6 +328,19 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
         PE_Video video={};uint32_t width=0,height=0;getDisplayDimensions(&width,&height);
         if(!source || PE_current_console(&video) || video.v_baseAddr!=bootMapping->getPhysicalAddress() || video.v_width!=width || video.v_height!=height)return;
         uint8_t *out=reinterpret_cast<uint8_t *>(bootMapping->getVirtualAddress());
+        if (shownSize.width) {
+            const uint32_t sourceWidth = shownSize.width, sourceHeight = shownSize.height;
+            uint32_t *row = static_cast<uint32_t *>(IOMallocData(sourceWidth * sizeof(uint32_t)));
+            if (!row) return;
+            for (uint32_t y = 0; y < height; ++y) {
+                const uint64_t offset = uint64_t(y * sourceHeight / height) * shownStride;
+                if (source->readBytes(offset, row, sourceWidth * sizeof(uint32_t)) != sourceWidth * sizeof(uint32_t)) break;
+                auto *pixels = reinterpret_cast<uint32_t *>(out + uint64_t(y) * video.v_rowBytes);
+                for (uint32_t x = 0; x < width; ++x) pixels[x] = row[x * sourceWidth / width];
+            }
+            IOFreeData(row, sourceWidth * sizeof(uint32_t));
+            return;
+        }
         for(uint32_t y=0;y<height && uint64_t(y+1)*video.v_rowBytes<=bootMapping->getLength();++y)
             if(source->readBytes(uint64_t(y)*shownStride,out+uint64_t(y)*video.v_rowBytes,uint64_t(width)*4)!=uint64_t(width)*4)return;
     }
@@ -382,10 +406,17 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
         const bool known=owner>0 && &native_adreno_owner_fences?native_adreno_owner_fences(owner,&submitted,&retired,detail):
             &native_adreno_fences_detail?native_adreno_fences_detail(&submitted,&retired,detail):
             (&native_adreno_fences && native_adreno_fences(&submitted,&retired));
-        if(known && !fenceCaptured) {
+        uint64_t elapsedNs=0;
+        if(fenceSince)absolutetime_to_nanoseconds(mach_absolute_time()-fenceSince,&elapsedNs);
+        const bool ownerIdle=known && owner>0 && &native_adreno_owner_fences && submitted==0;
+        // The owner query reports zero both before submission and after all of
+        // the owner's jobs have been reaped. Only wait briefly for a submission.
+        static constexpr uint64_t kOwnerSubmitGraceNs=2000000;
+        if(known && !fenceCaptured && (!ownerIdle || elapsedNs>=kOwnerSubmitGraceNs)) {
             fenceTarget=submitted;fenceCaptured=true;
+            if(ownerIdle)++native_legacy_owner_idle_swaps;
         }
-        if(known && int32_t(retired-fenceTarget)>=0) {
+        if(known && fenceCaptured && int32_t(retired-fenceTarget)>=0) {
             traceGpuComplete=true;
             gpuTraceEvent(GpuTraceDisplayFence,0,traceId(request),1,fenceTarget,submitted,retired,0,detail[0],detail[1],detail[2]);
             if(fenceSince)note(3,-1,request);
@@ -399,14 +430,19 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
             fenceFor=nullptr;return true;
         }
         if(!fenceSince) {fenceSince=mach_absolute_time();native_legacy_direct[9]=native_legacy_direct[9]+1;stat(6);note(2,-1,request);}
-        uint64_t ns=0;absolutetime_to_nanoseconds(mach_absolute_time()-fenceSince,&ns);
+        const uint64_t ns=elapsedNs;
         if(ns>=250000000ull && !fenceSlow) {
             gpuTraceEvent(GpuTraceDisplayFence,0,traceId(request),2,fenceTarget,submitted,retired,ns,detail[0],detail[1],detail[2]);
             native_legacy_direct[12]=native_legacy_direct[12]+1;
             fenceSlow=true;
         }
         gpuTraceEvent(GpuTraceDisplayFence,0,traceId(request),known?3:4,fenceTarget,submitted,retired,ns,detail[0],detail[1],detail[2]);
-        fenceTimer->setTimeoutUS(200);
+        if(ownerIdle && !fenceCaptured) {
+            const uint64_t remainingNs=kOwnerSubmitGraceNs-elapsedNs;
+            fenceTimer->setTimeoutUS(uint32_t((remainingNs+999)/1000));
+        } else {
+            fenceTimer->setTimeoutUS(fenceSlow?8000:200);
+        }
         return false;
     }
     static void fenceFired(OSObject *owner,IOTimerEventSource *) {static_cast<NativeLegacyDisplay *>(owner)->fenceTick();}
@@ -425,6 +461,8 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
         if(us>native_legacy_direct[4])native_legacy_direct[4]=us;
         native_legacy_direct[5]=native_legacy_direct[5]+us;
         shownSlot=pendingSlot;pendingSlot=-1;
+        shownSize=pendingSize;
+        if (shownSize.width) ++native_legacy_scaled_latches;
         stat(10);if(latchRequest)note(5,shownSlot,latchRequest);
         const OriginalLegacySwapRequest *request=latchRequest;latchRequest=nullptr;
         if(request)finishTransfer(request,true);
@@ -433,7 +471,9 @@ class NativeLegacyDisplay : public IOMobileFramebufferLegacy {
     // Back to the boot loader's memory (the blank frame and the copy are drawn there).
     void directToBoot() {
         if(!directOn || directBoot)return;
+        if (directScale) native_gop_direct_scale(0, 0);
         flip(bootIova,bootStride);directBoot=true;shownSlot=-1;
+        shownSize={};
         native_legacy_direct[8]=native_legacy_direct[8]+1;
     }
     bool vsyncWanted() const {
@@ -544,7 +584,9 @@ public:
     }
     bool startDisplay(IOService *provider) {
         if(!IOMobileFramebufferLegacy::start(provider))return false;
-        if(!native_legacy_ring) {
+        unsigned trace=0;
+        PE_parse_boot_argn("sheng-display-trace",&trace,sizeof(trace));
+        if(trace==1 && !native_legacy_ring) {
             const uint32_t cap=65536;
             volatile uint64_t (*memory)[2]=(volatile uint64_t (*)[2])IOMallocZero(sizeof(uint64_t)*2*cap);
             if(memory) {native_legacy_ring=memory;native_legacy_ring_cap=cap;}
@@ -576,7 +618,11 @@ public:
         native_legacy_pm_observed(3,kIOReturnSuccess,ordinal);
         IOReturn status=IOMobileFramebufferLegacy::setPowerState(ordinal,device);
         native_legacy_pm_observed(4,status,ordinal);
-        if (&native_legacy_panel_power) {
+        // The board backlight serializes physical panel transitions with
+        // CoreBrightness fades. Keep this path for early startup and other
+        // display providers without a backlight owner.
+        if (&native_legacy_panel_power &&
+            (!native_marble_backlight_owns_panel || !native_marble_backlight_owns_panel())) {
             const IOReturn panel=native_legacy_panel_power(ordinal);
             native_legacy_pm_observed(5,panel,ordinal);
             if (status==kIOReturnSuccess && panel!=kIOReturnUnsupported) status=panel;
@@ -697,15 +743,20 @@ public:
         noteSurface(surface,memory);
         const bool half=nativeHalf(native_legacy_surface_format(surface),native_legacy_surface_planes(surface));
         if(!gpuBypass && fenceTimer && !gpuWrote(request)) {transferred=true;return;}
-        if(directOn && !half && !scaled && !gpuBypass && latchRequest)stat(5);
-        if(directOn && !half && !scaled && !gpuBypass && !latchRequest) {
+        const bool canScanDirect = directOn && !half && !gpuBypass &&
+            (!scaled || (directScale && sourceStride <= UINT16_MAX &&
+                         native_gop_direct_scale_supported(sourceWidth, sourceHeight)));
+        if(canScanDirect && latchRequest)stat(5);
+        if(canScanDirect && !latchRequest) {
             const int slot=directSlot(surface,memory);
-            if(slot>=0) {
+            if(slot>=0 && (!directScale || native_gop_direct_scale(scaled ? sourceWidth : 0, scaled ? sourceHeight : 0))) {
                 native_legacy_swap_stage(1);
                 flip(directSlots[slot].iova,uint32_t(sourceStride));directBoot=false;
                 native_legacy_direct[0]=native_legacy_direct[0]+1;
                 stat(9);note(4,slot,request);noteFlipDelay(request);
-                shadowValid=false;pendingSlot=slot;latchRequest=request;transferred=true;
+                shadowValid=false;pendingSlot=slot;
+                pendingSize=scaled ? ScaledSize{sourceWidth,sourceHeight} : ScaledSize{};
+                latchRequest=request;transferred=true;
                 latchStart=mach_absolute_time();latchSlow=false;latchTimer->setTimeoutUS(500);
                 return;
             }
